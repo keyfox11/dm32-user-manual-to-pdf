@@ -78,26 +78,45 @@
  * one seen alone still identifies itself. There is no text to compete with, and
  * at ~66x56 device pixels on a 226dpi panel a 4px period resolves cleanly.
  */
+/*
+ * The pattern is one SVG stretched to fill the box, not a repeating CSS
+ * gradient, and that is not a stylistic preference -- the gradient version was
+ * visibly broken.
+ *
+ * A repeating-linear-gradient tiles from the box's background origin, and the
+ * boxes land on fractional x-offsets: measured across the manual's 14 markers,
+ * every one sits at a different sub-pixel position (7.656, 187.688, 440.375,
+ * 186.109 ...). Rasterising a 4px period against those phases aliases, and at
+ * some offsets it aliases badly enough that three clean diagonal bars collapse
+ * into an even grey moire -- so the same marker looked like a different symbol
+ * depending on where the line happened to break.
+ *
+ * background-size: 100% 100% with no-repeat removes the tiling entirely: one
+ * image, mapped corner to corner, identical geometry in every instance. The
+ * shapes inside are drawn explicitly rather than by an SVG <pattern>, so there
+ * is no tiling phase anywhere in the chain. Sizes are pinned to whole pixels
+ * for the same reason -- 29.781px wide left the last period clipped mid-stripe.
+ */
 .ors,
 .bls {
+  box-sizing: border-box !important;
+  width: 30px !important;
+  height: 26px !important;
   background-color: #ffffff !important;
+  background-repeat: no-repeat !important;
+  background-size: 100% 100% !important;
   border: 0.75pt solid #000000 !important;
   color: transparent !important;
 }
 
-/* Orange shift: diagonal hatching. */
+/* Orange shift: five bold diagonal bars. */
 .ors {
-  background-image: repeating-linear-gradient(
-    45deg,
-    #000000 0 1.5px,
-    #ffffff 1.5px 4px
-  ) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 26' preserveAspectRatio='none'%3E%3Cg stroke='black' stroke-width='3.6'%3E%3Cpath d='M-18 26L8 0'/%3E%3Cpath d='M-9 26L17 0'/%3E%3Cpath d='M0 26L26 0'/%3E%3Cpath d='M9 26L35 0'/%3E%3Cpath d='M18 26L44 0'/%3E%3Cpath d='M27 26L53 0'/%3E%3C/g%3E%3C/svg%3E") !important;
 }
 
-/* Blue shift: a dot grid. */
+/* Blue shift: a 4x3 grid of bold dots. */
 .bls {
-  background-image: radial-gradient(#000000 1px, #ffffff 1.2px) !important;
-  background-size: 4px 4px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 26' preserveAspectRatio='none'%3E%3Cg fill='black'%3E%3Ccircle cx='5' cy='5' r='2.4'/%3E%3Ccircle cx='12' cy='5' r='2.4'/%3E%3Ccircle cx='19' cy='5' r='2.4'/%3E%3Ccircle cx='26' cy='5' r='2.4'/%3E%3Ccircle cx='5' cy='13' r='2.4'/%3E%3Ccircle cx='12' cy='13' r='2.4'/%3E%3Ccircle cx='19' cy='13' r='2.4'/%3E%3Ccircle cx='26' cy='13' r='2.4'/%3E%3Ccircle cx='5' cy='21' r='2.4'/%3E%3Ccircle cx='12' cy='21' r='2.4'/%3E%3Ccircle cx='19' cy='21' r='2.4'/%3E%3Ccircle cx='26' cy='21' r='2.4'/%3E%3C/g%3E%3C/svg%3E") !important;
 }
 
 /* ----------------------------------------------------- 2. remaining colour */

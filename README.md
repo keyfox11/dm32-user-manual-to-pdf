@@ -435,8 +435,17 @@ mid-sentence, with nothing to compare against. So they become hollow and take a 
 | `.bls` | blue, right-shift (RS) | hollow box, dot grid |
 
 Stripes against dots rather than two stripe angles — a categorical difference rather than
-a matter of degree, so one seen alone still identifies itself. At roughly 66×56 device
-pixels on a 226 dpi panel, a 4 px pattern period resolves cleanly.
+a matter of degree, so one seen alone still identifies itself.
+
+Each pattern is **one SVG stretched to fill the box**, not a repeating CSS gradient. That
+matters: a `repeating-linear-gradient` tiles from the box's background origin, and the 14
+markers all land on different fractional x-offsets (7.656, 187.688, 440.375, 186.109 …).
+Rasterising a 4 px period against those phases aliases, and at some offsets it aliased
+badly enough that three clean diagonal bars collapsed into an even grey moiré — the same
+marker looking like a different symbol depending on where the line happened to break.
+`background-size: 100% 100%` with `no-repeat` removes the tiling entirely, the shapes
+inside are drawn explicitly rather than by an SVG `<pattern>`, and the boxes are pinned to
+whole pixels (30 × 26). Every instance is then geometrically identical.
 
 ### Two things the render rewrites
 
