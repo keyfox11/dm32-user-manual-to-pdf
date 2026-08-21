@@ -5,8 +5,8 @@
  * Uses Chrome's own PDF viewer rather than adding a native rasteriser (pdftoppm,
  * ImageMagick, canvas bindings) as a dependency -- the browser is already here.
  *
- *   node preview.mjs out/dm32_user_manual_ch1-3.pdf 1 8
- *   node preview.mjs out/dm32_user_manual_full.pdf 1 200 1.5 10   # every 10th page
+ *   node preview.mjs                                        # first 6 pages
+ *   node preview.mjs out/dm32_user_manual.pdf 1 200 1.5 10  # every 10th page
  *
  * PNGs land in out/preview/.
  */
@@ -19,7 +19,7 @@ import { findChrome } from './chrome.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 
-const pdfPath = process.argv[2] ?? join(ROOT, 'out', 'dm32_user_manual_ch1-3.pdf');
+const pdfPath = process.argv[2] ?? join(ROOT, 'out', 'dm32_user_manual.pdf');
 const first = Number(process.argv[3] ?? 1);
 const last = Number(process.argv[4] ?? 6);
 const scale = Number(process.argv[5] ?? 1.5);

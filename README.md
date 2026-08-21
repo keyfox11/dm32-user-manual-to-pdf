@@ -37,23 +37,25 @@ automatically — set `PUPPETEER_EXECUTABLE_PATH` if yours lives somewhere unusu
 
 ## Quick start
 
-Render the whole manual:
-
 ```bash
-npm install && node fetch-assets.mjs --all && node render.mjs --all
+npm install && npm run build
 ```
 
-That writes `out/dm32_user_manual_full.pdf`. The fetch pulls 222 images (about 3 MB) and
-takes a couple of minutes on first run; everything is cached afterwards. The render itself
-takes roughly a minute — two full passes plus a verification pass.
+That is the whole thing. It writes the complete 200-page manual to
+`out/dm32_user_manual.pdf`.
 
-Prefer to try it on a slice first? The default range is chapters 1–3:
+The first run pulls 222 images (about 3 MB) and takes a couple of minutes; everything is
+cached afterwards, so later builds are just the render — roughly a minute for two full
+passes plus a verification pass.
+
+If you would rather see output in a few seconds before committing to the whole thing, build
+a three-chapter sample instead:
 
 ```bash
-npm install && node fetch-assets.mjs && node render.mjs
+npm install && npm run build:sample
 ```
 
-That gives you a 19-page `out/dm32_user_manual_ch1-3.pdf` in a few seconds.
+That writes a 19-page `out/dm32_user_manual_ch1-3.pdf`.
 
 ## A note on copyright
 
@@ -75,13 +77,13 @@ built to the wrong settings.
 
 ### npm scripts
 
-| Script | Runs |
-|---|---|
-| `npm run fetch` | `node fetch-assets.mjs` |
-| `npm run render` | `node render.mjs` |
-| `npm run build` | `node fetch-assets.mjs && node render.mjs` — chapters 1–3 |
-| `npm run build:full` | `node fetch-assets.mjs --all && node render.mjs --all` — all 26 |
-| `npm run preview` | `node preview.mjs` |
+| Script | Runs | Output |
+|---|---|---|
+| `npm run build` | `node fetch-assets.mjs && node render.mjs` | The complete manual |
+| `npm run build:sample` | the same, both limited to `--to 3` | Chapters 1–3 |
+| `npm run fetch` | `node fetch-assets.mjs` | — |
+| `npm run render` | `node render.mjs` | — |
+| `npm run preview` | `node preview.mjs` | — |
 
 The single-command scripts forward extra flags after `--`:
 
@@ -89,11 +91,16 @@ The single-command scripts forward extra flags after `--`:
 npm run render -- --toc-depth 3 --margin 0.6
 ```
 
-**`build` and `build:full` do not.** npm appends forwarded arguments to the end of the whole
-script string, so `npm run build -- --all` expands to
-`node fetch-assets.mjs && node render.mjs --all` — the flag reaches only the render, which
-then wants images the fetch never downloaded. Call the two scripts directly when passing
-flags to both.
+**`build` and `build:sample` do not.** npm appends forwarded arguments to the end of the
+whole script string, so `npm run build -- --to 5` expands to
+`node fetch-assets.mjs && node render.mjs --to 5` — the flag reaches only the render, and
+the fetch has already downloaded everything. Harmless in that direction, but the reverse
+(`--from`) leaves the render wanting images that were never fetched. Call the two scripts
+directly when narrowing:
+
+```bash
+node fetch-assets.mjs --from 4 --to 6 && node render.mjs --from 4 --to 6
+```
 
 ### `fetch-assets.mjs`
 
@@ -101,10 +108,12 @@ Downloads the manual and its assets into `cache/`.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--from N` | `1` | First chapter whose images to download |
-| `--to M` | `3` | Last chapter whose images to download |
-| `--all` | off | Every chapter — 222 images, about 3 MB. Overrides `--from`/`--to`. |
+| `--from N` | first chapter | Start of the range. Given alone, runs to the end of the manual. |
+| `--to M` | last chapter | End of the range. Given alone, starts at chapter 1. |
+| `--all` | — | Every chapter. This is already the default; accepted so that saying it explicitly is not an error. |
 | `--refresh` | off | Re-download even files already in `cache/` |
+
+**With neither bound given you get the whole manual** — 222 images, about 3 MB.
 
 The manual itself, both stylesheets and the Font Awesome webfont are always fetched; the
 range only governs images. Fetch at least the range you intend to render — `render.mjs`
@@ -118,10 +127,15 @@ Prints a PDF from what is in `cache/`. Never touches the network.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--from N` | `1` | First chapter to include |
-| `--to M` | `3` | Last chapter to include |
-| `--all` | off | All 26 chapters. Overrides `--from`/`--to`. |
-| `--out PATH` | `out/dm32_user_manual_ch<from>-<to>.pdf`, or `…_full.pdf` with `--all` | Where to write |
+| `--from N` | first chapter | First chapter to include. Given alone, runs to the end. |
+| `--to M` | last chapter | Last chapter to include. Given alone, starts at chapter 1. |
+| `--all` | — | All 26 chapters. Already the default; accepted so saying it explicitly is not an error. |
+| `--out PATH` | `out/dm32_user_manual.pdf`, or `…_ch<from>-<to>.pdf` for a slice | Where to write |
+
+**With neither bound given you get the whole manual.** The output is named for what it
+actually holds, so a complete build is plain `dm32_user_manual.pdf` and a slice carries its
+range — `dm32_user_manual_ch4-6.pdf`. A range matching no chapters is an error rather than
+an empty PDF.
 
 **Density and images**
 
@@ -174,14 +188,14 @@ node preview.mjs <pdf> <first> <last> <scale> <step>
 
 | Position | Default | Effect |
 |---|---|---|
-| 1 — `pdf` | `out/dm32_user_manual_ch1-3.pdf` | PDF to rasterise |
+| 1 — `pdf` | `out/dm32_user_manual.pdf` | PDF to rasterise |
 | 2 — `first` | `1` | First page (1-based, physical sheet — not the printed number) |
 | 3 — `last` | `6` | Last page |
 | 4 — `scale` | `1.5` | Render scale; `1.0` is 96 dpi, `3` gives a legible zoom |
 | 5 — `step` | `1` | Sample every Nth page |
 
 ```bash
-node preview.mjs out/dm32_user_manual_full.pdf 1 200 1.5 10   # every 10th page
+node preview.mjs out/dm32_user_manual.pdf 1 200 1.5 10   # every 10th page
 ```
 
 ### Environment variables
@@ -192,7 +206,7 @@ node preview.mjs out/dm32_user_manual_full.pdf 1 200 1.5 10   # every 10th page
 | `DM32_DEBUG` | Set to anything truthy for extra render diagnostics: every MathJax file served from `node_modules`, every MathJax `@font-face` with its load status, and the result of `document.fonts.check('16px MathJax_Math')`. |
 
 ```bash
-PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium DM32_DEBUG=1 node render.mjs --all
+PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium DM32_DEBUG=1 node render.mjs
 ```
 
 ---
@@ -369,7 +383,7 @@ rendered range.
 To look at the result:
 
 ```bash
-node preview.mjs out/dm32_user_manual_full.pdf 1 200 1.5 10
+node preview.mjs out/dm32_user_manual.pdf 1 200 1.5 10
 ```
 
 That rasterises every tenth page to `out/preview/` for a quick flip-through.
@@ -379,11 +393,16 @@ That rasterises every tenth page to `out/preview/` for a quick flip-through.
 **"No Chrome, Chromium or Edge found"** — set `PUPPETEER_EXECUTABLE_PATH` to your browser
 binary. The error lists everywhere it looked.
 
-**"Cache incomplete — run node fetch-assets.mjs first"** — the render needs the mirror. If you
-widened the chapter range, re-run the fetch with the same range.
+**"Cache incomplete — run node fetch-assets.mjs first"** — the render needs the mirror, and
+nothing has been downloaded yet. `npm run build` does both in order.
 
-**Images missing from cache** — the render names them and exits non-zero. Re-run the fetch;
-`--refresh` forces a re-download of files already present.
+**Images missing from cache** — you fetched a narrower range than you are rendering. Either
+render the range you fetched, or re-run `node fetch-assets.mjs` with no bounds to pull
+everything. The render names the missing files and exits non-zero rather than printing a PDF
+with holes in it.
+
+**"No chapters in range"** — `--from`/`--to` selected nothing, e.g. a `--from` past chapter 26
+or bounds the wrong way round. Both scripts refuse rather than producing an empty PDF.
 
 **429s during fetch** — the origin rate-limits bursts. The fetcher already backs off and
 retries up to five times; if it still fails, wait a few minutes and run it again. Anything
@@ -394,7 +413,7 @@ already downloaded is skipped.
 - **12 cross-references do not resolve.** They are broken in the source document and dead on
   the website too — targets like `#Loops with counters (DSE` (a malformed AsciiDoc xref) and
   `#File`, `#Settings`, `#battery`, which no element defines. The render reports the count every
-  time; it should read 12 for `--all`, and any increase means something in this pipeline dropped
+  time; it should read 12 for a complete build, and any increase means something here dropped
   an anchor.
 - The site's own `Theinhardt` webfonts return 404 upstream, so the page already falls back to a
   system sans. `print.css` names the stack explicitly to keep output reproducible.

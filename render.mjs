@@ -8,9 +8,9 @@
  * reproducible, and the injected print.css is guaranteed to come last in cascade
  * order.
  *
- *   node render.mjs                        # chapters 1-3
- *   node render.mjs --from 1 --to 5
- *   node render.mjs --all
+ *   node render.mjs                        # the complete manual (default)
+ *   node render.mjs --to 3                 # just the first three chapters
+ *   node render.mjs --from 4 --to 6
  *   node render.mjs --image-width 3.2      # narrow figures to save pages
  *   node render.mjs --dump-html            # also write the transformed HTML
  */
@@ -68,9 +68,10 @@ function liveArea(marginIn) {
 
 function parseArgs(argv) {
   const a = {
-    from: 1,
-    to: 3,
-    all: false,
+    /* null means unbounded, so the default -- neither flag given -- is the whole
+       manual. Someone who just wants the PDF should not have to ask for it. */
+    from: null,
+    to: null,
     out: null,
     imageWidth: 3.6, // inches
     dpiFloor: 220, // never enlarge an image past this effective resolution
@@ -87,7 +88,8 @@ function parseArgs(argv) {
   const unknown = [];
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
-    if (k === '--all') a.all = true;
+    // --all is what you already get by default; kept so it is not an error to say so.
+    if (k === '--all') (a.from = null), (a.to = null);
     else if (k === '--dump-html') a.dumpHtml = true;
     else if (k === '--from') a.from = Number(argv[++i]);
     else if (k === '--to') a.to = Number(argv[++i]);
@@ -266,7 +268,7 @@ async function main() {
       });
 
       const report = await page.evaluate((opts) => {
-        const { from, to, all, imageWidth, dpiFloor } = opts;
+        const { from, to, imageWidth, dpiFloor } = opts;
         const content = document.querySelector('#content');
         const stats = { figures: 0, leadIns: 0, images: [], stems: 0, dropped: 0, mathTypeset: 0 };
 
@@ -287,21 +289,27 @@ async function main() {
         const brand = /^([^C]*?)\s*Copyright/.exec(introText)?.[1]?.trim() || 'SwissMicros GmbH';
         const version = introText.replace(/^.*?(Copyright)/, '$1').trim();
 
-        /* ---- select the chapter range ----------------------------------- */
+        /* ---- select the chapter range -----------------------------------
+           Either bound may be null, meaning "no limit that side": --from 5 alone
+           runs to the end, --to 5 alone starts at the beginning, and neither is
+           the whole manual. */
         const chapters = [...content.querySelectorAll(':scope > .sect1')];
+        const lo = from ?? 1;
+        const hi = to ?? chapters.length;
         const kept = [];
         chapters.forEach((sect, i) => {
           const n = i + 1;
-          if (all || (n >= from && n <= to)) {
+          if (n >= lo && n <= hi) {
             kept.push({ number: n, title: sect.querySelector('h2')?.textContent.trim() ?? '' });
           } else {
             sect.remove();
             stats.dropped++;
           }
         });
+        const complete = kept.length === chapters.length;
 
         /* ---- generated title page --------------------------------------- */
-        const scopeLine = all
+        const scopeLine = complete
           ? `Complete manual — ${kept.length} chapters`
           : `Partial render — chapters ${kept[0]?.number}–${kept[kept.length - 1]?.number} of ${chapters.length}`;
         /* Listing chapter titles is useful when a handful were selected; at full
@@ -440,11 +448,10 @@ async function main() {
           inCover: !!h.closest('.dm32-title-page'),
         }));
 
-        return { stats, kept, chapterCount: chapters.length, docTitle, version, tocEntries, headings };
+        return { stats, kept, complete, chapterCount: chapters.length, docTitle, version, tocEntries, headings };
       }, {
         from: args.from,
         to: args.to,
-        all: args.all,
         imageWidth: args.imageWidth,
         dpiFloor: args.dpiFloor,
         mathTypeset: math.ok,
@@ -459,6 +466,15 @@ async function main() {
          Only mark a block unbreakable once we know it actually fits. Applying
          break-inside:avoid to something taller than a page ejects it to a fresh
          page and strands the remainder of the previous one. */
+      if (!report.kept.length) {
+        const err = new Error(
+          `No chapters in range: --from ${args.from ?? 1} --to ${args.to ?? report.chapterCount} ` +
+            `matched none of the manual's ${report.chapterCount} chapters.`,
+        );
+        err.usage = true;
+        throw err;
+      }
+
       const measured = await page.evaluate((liveHeightPx, ratio, weldRatio) => {
         const limit = liveHeightPx * ratio;
         const weldMax = liveHeightPx * weldRatio;
@@ -550,7 +566,7 @@ async function main() {
       );
 
       /* Cross-references into chapters this render dropped cannot resolve. Expected
-         for a partial render; should be zero for --all. */
+         for a partial render; should be 12 for the complete manual. */
       const links = await page.evaluate(() => {
         const internal = [...document.querySelectorAll('#content a[href^="#"]')];
         const dangling = internal.filter((a) => !document.getElementById(a.hash.slice(1)));
@@ -586,11 +602,22 @@ async function main() {
       };
     };
 
-    const label = args.all ? 'full' : `ch${args.from}-${args.to}`;
-    const outPath = args.out ?? join(OUT, `dm32_user_manual_${label}.pdf`);
+    let result = await renderOnce(null);
+
+    /* Named after what it actually contains, which is only known once the range
+       has been resolved against the real chapter count: the complete manual is
+       plain dm32_user_manual.pdf, a slice carries its range in the name. */
+    const kept = result.report.kept;
+    const outPath =
+      args.out ??
+      join(
+        OUT,
+        result.report.complete
+          ? 'dm32_user_manual.pdf'
+          : `dm32_user_manual_ch${kept[0].number}-${kept[kept.length - 1].number}.pdf`,
+      );
     await mkdir(dirname(outPath), { recursive: true });
 
-    let result = await renderOnce(null);
     let toc = { entries: 0, frontMatterPages: 0, wrong: 0 };
 
     if (args.toc) {
@@ -674,7 +701,7 @@ async function main() {
     console.log(`   content needs              ${measured.idealPages.toFixed(1)} pages of live area`);
     console.log(`\nCross-references:`);
     console.log(`   internal links             ${links.internal}`);
-    console.log(`   pointing outside range     ${links.dangling}${args.all ? '' : ' (expected for a partial render)'}`);
+    console.log(`   pointing outside range     ${links.dangling}${report.complete ? '' : ' (expected for a partial render)'}`);
     console.log(`\nFront matter:`);
     console.log(`   contents entries           ${args.toc ? `${toc.entries} (depth ${args.tocDepth})` : 'disabled'}`);
     console.log(`   pages before body page 1   ${toc.frontMatterPages + 1} (cover + contents)`);

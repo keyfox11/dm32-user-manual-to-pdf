@@ -6,9 +6,9 @@
  * The HTML is stored byte-identical to upstream: all restructuring happens later,
  * in render.mjs's DOM pass. That keeps the mirror honest and re-verifiable.
  *
- *   node fetch-assets.mjs                 # images for chapters 1-3 (default range)
- *   node fetch-assets.mjs --from 1 --to 5
- *   node fetch-assets.mjs --all           # every image in the manual
+ *   node fetch-assets.mjs                 # every image in the manual (default)
+ *   node fetch-assets.mjs --to 3          # just the first three chapters
+ *   node fetch-assets.mjs --from 4 --to 6
  *   node fetch-assets.mjs --refresh       # re-download even if cached
  */
 
@@ -38,11 +38,13 @@ export function cachePathFor(url) {
 }
 
 function parseArgs(argv) {
-  const args = { from: 1, to: 3, all: false, refresh: false };
+  // null bounds mean unlimited, so the default is every chapter's images.
+  const args = { from: null, to: null, refresh: false };
   const unknown = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--all') args.all = true;
+    // --all is the default; accepted so saying it explicitly is not an error.
+    if (a === '--all') (args.from = null), (args.to = null);
     else if (a === '--refresh') args.refresh = true;
     else if (a === '--from') args.from = Number(argv[++i]);
     else if (a === '--to') args.to = Number(argv[++i]);
@@ -162,12 +164,17 @@ async function main() {
   }
 
   const chapters = splitChapters(html);
-  const selected = args.all
-    ? chapters
-    : chapters.filter((c) => c.number >= args.from && c.number <= args.to);
+  const lo = args.from ?? 1;
+  const hi = args.to ?? chapters.length;
+  const selected = chapters.filter((c) => c.number >= lo && c.number <= hi);
 
   if (!selected.length) {
-    throw new Error(`No chapters matched --from ${args.from} --to ${args.to}`);
+    const err = new Error(
+      `No chapters in range: --from ${lo} --to ${hi} matched none of the ` +
+        `manual's ${chapters.length} chapters.`,
+    );
+    err.usage = true;
+    throw err;
   }
 
   // The preamble sits before the first chapter and may carry images of its own.
@@ -176,7 +183,7 @@ async function main() {
   const srcs = imageSources(scope);
 
   console.log(
-    `\nChapters ${args.all ? '1-' + chapters.length : `${args.from}-${args.to}`}: ` +
+    `\nChapters ${lo}-${hi}${selected.length === chapters.length ? ' (complete manual)' : ''}: ` +
       `${selected.length} chapter(s), ${srcs.length} distinct images`,
   );
   for (const c of selected) console.log(`  ${c.title}`);

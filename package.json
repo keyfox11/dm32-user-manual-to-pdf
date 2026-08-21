@@ -22,7 +22,7 @@
     "fetch": "node fetch-assets.mjs",
     "render": "node render.mjs",
     "build": "node fetch-assets.mjs && node render.mjs",
-    "build:full": "node fetch-assets.mjs --all && node render.mjs --all",
+    "build:sample": "node fetch-assets.mjs --to 3 && node render.mjs --to 3",
     "preview": "node preview.mjs"
   },
   "dependencies": {
