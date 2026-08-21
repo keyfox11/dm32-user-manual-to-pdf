@@ -23,6 +23,7 @@
     "render": "node render.mjs",
     "build": "node fetch-assets.mjs && node render.mjs",
     "build:sample": "node fetch-assets.mjs --to 3 && node render.mjs --to 3",
+    "build:grey": "node fetch-assets.mjs && node render.mjs --greyscale",
     "preview": "node preview.mjs"
   },
   "dependencies": {

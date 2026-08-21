@@ -1,0 +1,151 @@
+/*
+ * Greyscale mode (--greyscale). Injected after print.css, so every rule here is
+ * an override of something print.css or the site CSS already set.
+ *
+ * Target: monochrome displays -- e-ink readers, laser printers, photocopies.
+ *
+ * ---------------------------------------------------------------- why re-encode
+ *
+ * The DM32 marks which shift prefix a function needs by colour and nothing else:
+ * orange .or for one shift key, blue .bl for the other, 816 labels between them.
+ * That is functional information, not decoration -- orange-shift CLEAR and
+ * blue-shift CLEAR are different operations -- so when the colour goes, the
+ * distinction has to reappear somewhere else.
+ *
+ * Desaturating is not enough. Measured against the colour build:
+ *
+ *     .or  #F99A2B   L* 71.8   2.17:1 on white   desaturates to #b0b0b0
+ *     .bl  #4A82D6   L* 54.3   3.85:1 on white   desaturates to #828282
+ *
+ * Two separate failures. First legibility: 2.17:1 is far under the 4.5:1 wanted
+ * for body text, and a reflective panel with no backlight behind it is a harsher
+ * place to read than the number suggests. Second separation: #b0b0b0 against
+ * #828282 becomes the only carrier of which-shift-key, and dithering down to 16
+ * grey levels attacks precisely that.
+ *
+ * So this file does not desaturate. It re-encodes:
+ *
+ *   - both labels move somewhere comfortably legible (21:1 and 6.9:1),
+ *   - pushed apart to a 38-point L* gap rather than 17,
+ *   - and the blue shift picks up italic, a second channel that does not depend
+ *     on grey level at all. A reader who cannot resolve the two greys -- bad
+ *     lighting, heavy dithering, a third-generation photocopy -- can still read
+ *     the slant.
+ *
+ * The italic is the one rule here that changes letterforms rather than tone. If
+ * you would rather have grey level alone, delete the two `font-style` rules
+ * below; everything else stands on its own.
+ */
+
+/* --------------------------------------------------------- 1. shift labels */
+
+/* Orange shift: the darker of the pair, and upright. */
+.or {
+  color: #000000; /* L* 0, 21:1 on white */
+}
+
+/* Blue shift: mid grey, and slanted so grey level is not load-bearing. */
+.bl {
+  color: #5a5a5a; /* L* 38.2, 6.9:1 on white */
+  font-style: italic;
+}
+
+/*
+ * The manual has a third label colour that is easy to miss: .br, "inline style
+ * brown", 87 spans marking the stack registers x/y/z/t and the ▲ glyph. It
+ * shares #7a5f48 with the headings but is doing an entirely different job.
+ *
+ * It needs its own slot because ▲ is labelled .or 16 times and .br 63 times --
+ * the one glyph where brown and orange genuinely have to be told apart. Against
+ * .or that is a 45-point L* gap. Against .bl it is only 7 points plus the
+ * slant, which is fine: no label in the manual is ever both .bl and .br, so
+ * that pair never has to disambiguate anything.
+ */
+.br {
+  color: #6b6b6b; /* L* 45.2, 5.3:1 on white */
+}
+
+/*
+ * The .ors / .bls swatches are filled chips standing in for the physical keys.
+ * print.css leaves them at the hardware colour so they match the keypad
+ * photographs; here the photographs are greyscale too, so the chips follow the
+ * same black/mid-grey split as the text labels above. White text, since both
+ * backgrounds are now too dark for the black the source sets.
+ */
+.ors {
+  background-color: #000000 !important;
+  border-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+.bls {
+  background-color: #5a5a5a !important;
+  border-color: #5a5a5a !important;
+  color: #ffffff !important;
+  font-style: italic;
+}
+
+/* ----------------------------------------------------- 2. remaining colour */
+
+/*
+ * Admonition icons are all #f99a2b -- the same washed-out 2.17:1 as the orange
+ * labels, across 100 note/tip/warning blocks. Dark enough to read, deliberately
+ * not black: the icon is a marker, and should not outweigh the text beside it.
+ */
+.admonitionblock td.icon .icon-note:before,
+.admonitionblock td.icon .icon-tip:before,
+.admonitionblock td.icon .icon-warning:before,
+.admonitionblock td.icon .icon-caution:before,
+.admonitionblock td.icon .icon-important:before {
+  color: #4a4a4a !important; /* L* 31.5, 8.9:1 */
+}
+
+/*
+ * Every heading level carries the source's warm #7a5f48, not just the h4 that
+ * print.css restates -- 261 of them. Replaced by the neutral grey of the same
+ * luminance, so the page keeps its existing tonal hierarchy exactly and only
+ * the hue leaves.
+ */
+h1, h2, h3, h4, h5, h6,
+.dm32-toc .toc-l1 .toc-title {
+  color: #646464; /* luminance-matched to #7a5f48, L* 42.4 */
+}
+
+/*
+ * Key chips: 1048 of them, on a warm #dbd3cc. Low chroma, so this is the least
+ * visible thing in the file -- but leaving it in would mean a PDF built by a
+ * flag called --greyscale still had colour in it.
+ */
+kbd {
+  background-color: #d4d4d4 !important; /* luminance-matched, L* 85.0 */
+  border-color: #bdbdbd !important;
+}
+
+/* External links keep their underline, which is the cue that survives anyway. */
+a[href^="http"] {
+  color: #4d4d4d; /* luminance-matched to #14507d */
+}
+
+/* Warm-grey admonition rule, neutralised. */
+.admonitionblock > table td.content {
+  border-left-color: #d4d4d4;
+}
+
+/* ------------------------------------------------ 3. what is NOT done here
+ *
+ * The figures are deliberately left alone. `filter: grayscale(1)` on img is the
+ * obvious addition and it is a trap: the filter forces Chrome to re-rasterise
+ * at layout resolution, which took the screenshots from their native 1241px
+ * down to 1084px -- 345 DPI to 301 DPI at a 3.6in placement. The output file
+ * got 13% smaller, which looks like a win until you notice the saving is
+ * discarded pixels rather than better compression.
+ *
+ * There is nothing to buy with that anyway: Chrome already emits most of these
+ * images as DeviceGray because the source PNGs are greyscale to begin with, and
+ * a monochrome display converts whatever is left on its own.
+ *
+ * What that leaves unsolved: the keypad photographs are colour, and they show
+ * the orange and blue shift keys. Greyscaled, those two keys are similar tones,
+ * so the photographs cannot tell you which shift key is which -- only the text
+ * labels above can. Nothing in CSS can fix a photograph.
+ */

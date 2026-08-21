@@ -80,6 +80,7 @@ function parseArgs(argv) {
     baseFont: 10, // pt; print.css is authored around this
     margin: 0.7, // in
     shiftBlue: null, // override .bl; source #97B6E6, print.css uses #4A82D6
+    greyscale: false, // re-encode shift labels for monochrome displays
     toc: true, // generate a contents section with real page numbers
     tocDepth: 2, // 1 = chapters, 2 = + sections, 3 = + subsections
     pageNumbers: true, // stamp numbers into the bottom margin
@@ -135,6 +136,8 @@ function parseArgs(argv) {
     else if (k === '--base-font') a.baseFont = num(k, ++i);
     else if (k === '--margin') a.margin = num(k, ++i);
     else if (k === '--shift-blue') a.shiftBlue = colour(k, ++i);
+    // Both spellings: the flag is for readers, not for a style guide.
+    else if (k === '--greyscale' || k === '--grayscale') a.greyscale = true;
     else if (k === '--no-toc') a.toc = false;
     else if (k === '--toc-depth') a.tocDepth = num(k, ++i);
     else if (k === '--no-page-numbers') a.pageNumbers = false;
@@ -160,6 +163,14 @@ function parseArgs(argv) {
   if (![1, 2, 3].includes(a.tocDepth)) {
     fail(`--toc-depth expects 1, 2 or 3, got ${a.tocDepth}.`);
   }
+  /* --shift-blue picks a colour for .bl; --greyscale takes colour off .bl.
+     Letting one quietly win would hide which of the two you actually got. */
+  if (a.greyscale && a.shiftBlue) {
+    fail(
+      `--greyscale and --shift-blue ${a.shiftBlue} contradict each other: one sets the\n` +
+        'blue shift colour, the other replaces it with grey. Pass only one.',
+    );
+  }
   if (a.margin < 0 || a.margin >= 5) fail(`--margin ${a.margin} leaves no room for text.`);
   if (a.baseFont <= 0) fail(`--base-font must be positive, got ${a.baseFont}.`);
   if (a.imageWidth <= 0) fail(`--image-width must be positive, got ${a.imageWidth}.`);
@@ -183,6 +194,12 @@ async function main() {
     throw new Error(`Cache incomplete -- run "node fetch-assets.mjs" first.\n  ${err.message}`);
   });
   const stamp = JSON.parse(stampRaw);
+
+  /* Read separately from the block above: a missing greyscale.css is a broken
+     checkout, not the incomplete cache that error blames it on. */
+  const greyscaleCss = args.greyscale
+    ? await readFile(join(ROOT, 'greyscale.css'), 'utf8')
+    : null;
 
   /* Inline the Font Awesome webfont so the admonition icons need no network and
      no CORS negotiation from a file:// document. The upstream @font-face carries
@@ -279,6 +296,12 @@ async function main() {
         await page.addStyleTag({ content: `.bl { color: ${args.shiftBlue}; }` });
       }
 
+      /* Last, so it overrides every colour set above. See greyscale.css for why
+         this re-encodes the shift labels rather than just desaturating them. */
+      if (args.greyscale) {
+        await page.addStyleTag({ content: greyscaleCss });
+      }
+
       /* MathJax typesets at load time, before print.css lands, so its output would
          be sized for the 18px screen body. Force a rerender now that the final
          styles are applied, and wait for the queue to drain before measuring. */
@@ -315,7 +338,7 @@ async function main() {
       });
 
       const report = await page.evaluate((opts) => {
-        const { from, to, imageWidth, dpiFloor } = opts;
+        const { from, to, imageWidth, dpiFloor, greyscale } = opts;
         const content = document.querySelector('#content');
         const stats = { figures: 0, leadIns: 0, images: [], stems: 0, dropped: 0, mathTypeset: 0 };
 
@@ -374,7 +397,9 @@ async function main() {
           <div class="scope-list">${scopeList}</div>
           <div class="provenance">
             Rendered from ${opts.sourceUrl}<br>
-            Retrieved ${opts.retrieved} · Typeset for US Letter
+            Retrieved ${opts.retrieved} · Typeset for US Letter${
+              greyscale ? ' · Greyscale' : ''
+            }
           </div>`;
         content.prepend(cover);
 
@@ -501,6 +526,7 @@ async function main() {
         to: args.to,
         imageWidth: args.imageWidth,
         dpiFloor: args.dpiFloor,
+        greyscale: args.greyscale,
         mathTypeset: math.ok,
         toc: args.toc,
         tocDepth: args.tocDepth,
@@ -653,16 +679,16 @@ async function main() {
 
     /* Named after what it actually contains, which is only known once the range
        has been resolved against the real chapter count: the complete manual is
-       plain dm32_user_manual.pdf, a slice carries its range in the name. */
+       plain dm32_user_manual.pdf, a slice carries its range in the name. The
+       _grey suffix keeps a monochrome build from overwriting the colour one --
+       the two are equally valid outputs and people will want both on disk. */
     const kept = result.report.kept;
+    const range = result.report.complete
+      ? ''
+      : `_ch${kept[0].number}-${kept[kept.length - 1].number}`;
     const outPath =
       args.out ??
-      join(
-        OUT,
-        result.report.complete
-          ? 'dm32_user_manual.pdf'
-          : `dm32_user_manual_ch${kept[0].number}-${kept[kept.length - 1].number}.pdf`,
-      );
+      join(OUT, `dm32_user_manual${range}${args.greyscale ? '_grey' : ''}.pdf`);
     await mkdir(dirname(outPath), { recursive: true });
 
     let toc = { entries: 0, frontMatterPages: 0, wrong: 0 };

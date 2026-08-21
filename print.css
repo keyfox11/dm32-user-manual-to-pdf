@@ -352,11 +352,18 @@ pre, code, .literalblock pre, .listingblock pre {
  * the physical shift key and reads fine backlit on a screen, but is washed out as
  * bold 10pt text on white paper.
  *
- * Same hue (~216deg) and saturation, raised to the lightness of the orange it sits
- * beside: #4A82D6 is L56% against #F99A2B's L57%, so blue and orange labels carry
- * equal weight on the page the way the source intends. (An earlier #2B69CA held the
- * hue but sat at L48% -- 5.3:1 on white against the orange's 2.2:1, which made every
- * blue label shout over its orange neighbours.)
+ * Same hue (~216deg) and saturation, raised toward the orange it sits beside:
+ * #4A82D6 is HSL-L 56.5% against #F99A2B's 57.3%. (An earlier #2B69CA held the hue
+ * but sat at HSL-L 48% -- 5.3:1 on white against the orange's 2.2:1, which made
+ * every blue label shout over its orange neighbours.)
+ *
+ * Note that HSL lightness is a cylinder coordinate, not a perceptual one, so the
+ * match is looser than it looks: in CIE L* the orange is 71.8 and this blue 54.3,
+ * a 17.5-point gap, and the blue still carries the more weight of the two. Closing
+ * that properly would mean lightening the blue to roughly #7FA9E4 and accepting
+ * 2.2:1 on white for both -- which is a choice about the colour build, not a defect
+ * to quietly patch. --greyscale ignores all of this and re-encodes both from
+ * scratch; see greyscale.css.
  *
  * The .bls swatches are left at the hardware colour deliberately -- they are
  * pictures of the key itself, and must keep matching the keypad photographs.

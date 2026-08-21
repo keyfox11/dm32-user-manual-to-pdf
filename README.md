@@ -96,6 +96,7 @@ Flags with no placeholder are switches and take no value. Quote hex colours — 
 |---|---|---|
 | `npm run build` | `node fetch-assets.mjs && node render.mjs` | The complete manual |
 | `npm run build:sample` | the same, both limited to `--to 3` | Chapters 1–3 |
+| `npm run build:grey` | the same, with `--greyscale` on the render | The complete manual, monochrome |
 | `npm run fetch` | `node fetch-assets.mjs` | — |
 | `npm run render` | `node render.mjs` | — |
 | `npm run preview` | `node preview.mjs` | — |
@@ -161,6 +162,7 @@ an empty PDF.
 | `--image-width IN` | `3.6` | Width cap for figures |
 | `--dpi-floor DPI` | `220` | Never enlarge an image past this effective resolution. Raise it to shrink figures without touching the cap — `--dpi-floor 400` narrows every screenshot that would otherwise fall below 400 dpi. |
 | `--shift-blue HEX` | `#4A82D6` | Colour of the blue shift labels. `--shift-blue "#97B6E6"` restores the original web colour. |
+| `--greyscale` | off | Re-encode for a monochrome display. See [Greyscale](#greyscale). `--grayscale` also works. Conflicts with `--shift-blue`. |
 
 `print.css` is authored at 10 pt / 0.7 in. `--base-font` and `--margin` are injected as an
 override on top of it rather than replacing it, so the stylesheet and the flags cannot drift
@@ -371,6 +373,60 @@ status. The `-R` and `-Rx` variants reporting `error` there is **normal** — Ma
 face three times and tries a `local()` copy first; the `-Rw` (woff) variants are the ones that
 must say `loaded`.
 
+## Greyscale
+
+```bash
+node render.mjs --greyscale
+```
+
+Writes `out/dm32_user_manual_grey.pdf`, leaving any colour build beside it. Intended for
+e-ink readers, monochrome laser printers and photocopies. Pagination is identical to the
+colour build — same 200 pages.
+
+**Why this is not just desaturation.** The manual says which shift prefix a function needs
+using colour and nothing else — orange `.or` for one shift key, blue `.bl` for the other,
+816 labels between them. That is functional information: orange-shift `CLEAR` and
+blue-shift `CLEAR` are different operations. Drop the colour and the distinction has to
+reappear somewhere, or the document stops being usable.
+
+Desaturating fails twice over:
+
+| Label | Source | L\* | On white | Desaturates to |
+|---|---|---|---|---|
+| `.or` | `#F99A2B` | 71.8 | 2.17:1 | `#b0b0b0` |
+| `.bl` | `#4A82D6` | 54.3 | 3.85:1 | `#828282` |
+
+2.17:1 is far below the 4.5:1 wanted for body text, and a reflective panel with no
+backlight is a harsher place to read than that number suggests. Worse, `#b0b0b0` against
+`#828282` becomes the *only* carrier of which-shift-key, and dithering to 16 grey levels
+attacks exactly that.
+
+So `greyscale.css` re-encodes rather than desaturates:
+
+| Class | Marks | Greyscale | L\* | On white |
+|---|---|---|---|---|
+| `.or` | orange shift | `#000000`, upright | 0.0 | 21:1 |
+| `.bl` | blue shift | `#5a5a5a`, *italic* | 38.2 | 6.9:1 |
+| `.br` | stack registers, `▲` | `#6b6b6b`, upright | 45.2 | 5.3:1 |
+
+The italic is the point: a reader who cannot resolve two greys can still read a slant, so
+grey level is never the only thing carrying the distinction. If you would rather have grey
+level alone, delete the two `font-style` rules in [greyscale.css](greyscale.css).
+
+Three classes rather than two because the manual has a third label colour that is easy to
+miss — `.br`, "inline style brown", marking the stack registers and `▲`. It needs its own
+slot because `▲` is labelled `.or` 16 times and `.br` 63 times. Headings, key chips,
+admonition icons and external links are also neutralised, each to the grey of its own
+luminance so the page keeps its existing tonal hierarchy and only the hue leaves.
+
+Figures are left alone deliberately — `filter: grayscale(1)` on `img` re-rasterises the
+screenshots down from 1241 px to 1084 px, and Chrome already emits most of them as
+`DeviceGray` because the source PNGs are greyscale to begin with.
+
+**What this cannot fix:** the keypad photographs are colour, and they show the orange and
+blue shift keys. Greyscaled, those two keys are similar tones, so the photographs cannot
+tell you which shift key is which — only the text labels can.
+
 ## Tuning density
 
 Measured on chapters 1–3, all with cover and contents included:
@@ -434,10 +490,16 @@ already downloaded is skipped.
   system sans. `print.css` names the stack explicitly to keep output reproducible.
 - Blue shift labels (`.bl`) are the one colour that departs from the source. Bold 10 pt
   `#97B6E6` is washed out on white paper, so it moves to `#4A82D6` — same hue and saturation,
-  raised to the *lightness of the orange it sits beside* (L56% against `#F99A2B`'s L57%) so the
-  two label colours carry equal weight on the page. Pass `--shift-blue "#97B6E6"` for the original.
+  raised to sit closer to the orange beside it. Pass `--shift-blue "#97B6E6"` for the original.
   The `.bls` swatches keep the original colour deliberately: they are pictures of the physical
   key and need to match the keypad photographs.
+- **The two shift colours are not actually balanced.** `#4A82D6` was picked to match
+  `#F99A2B` at "L56% against L57%", but those are HSL lightness values, which are a cylinder
+  coordinate rather than a perceptual one. In CIE L\* the orange is 71.8 and the blue 54.3 — a
+  17.5-point gap — so the blue labels do carry more weight on the page than the orange, just
+  less than the `#2B69CA` that the current colour replaced. Left as-is rather than quietly
+  restyled, because which of the two should dominate is a design call, not a bug fix. It does
+  not affect `--greyscale`, which re-encodes both from scratch.
 
 ## Licence
 
