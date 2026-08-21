@@ -84,6 +84,7 @@ function parseArgs(argv) {
     pageNumbers: true, // stamp numbers into the bottom margin
     dumpHtml: false,
   };
+  const unknown = [];
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === '--all') a.all = true;
@@ -101,6 +102,18 @@ function parseArgs(argv) {
     else if (k === '--no-toc') a.toc = false;
     else if (k === '--toc-depth') a.tocDepth = Number(argv[++i]);
     else if (k === '--no-page-numbers') a.pageNumbers = false;
+    else unknown.push(k);
+  }
+  /* Refuse rather than ignore. With this many flags a typo is easy, and silently
+     dropping one produces a plausible-looking PDF built to the wrong settings --
+     the worst kind of wrong, because nothing about the output says so. */
+  if (unknown.length) {
+    const err = new Error(
+      `Unrecognised option${unknown.length > 1 ? 's' : ''}: ${unknown.join(' ')}\n` +
+        'See the Options section of README.md for the full list.',
+    );
+    err.usage = true; // a typo, not a crash -- print it without a stack trace
+    throw err;
   }
   return a;
 }
@@ -701,6 +714,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  // Usage errors are the user mistyping a flag; a stack trace only buries the message.
+  console.error(err.usage ? err.message : err);
   process.exit(1);
 });

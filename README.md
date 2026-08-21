@@ -69,32 +69,131 @@ rather than flooding the origin, and honours `Retry-After` when the server pushe
 
 ## Options
 
+Everything both scripts accept is listed below. Anything else is **rejected, not ignored** —
+a mistyped flag fails immediately rather than silently producing a plausible-looking PDF
+built to the wrong settings.
+
+### npm scripts
+
+| Script | Runs |
+|---|---|
+| `npm run fetch` | `node fetch-assets.mjs` |
+| `npm run render` | `node render.mjs` |
+| `npm run build` | `node fetch-assets.mjs && node render.mjs` — chapters 1–3 |
+| `npm run build:full` | `node fetch-assets.mjs --all && node render.mjs --all` — all 26 |
+| `npm run preview` | `node preview.mjs` |
+
+The single-command scripts forward extra flags after `--`:
+
+```bash
+npm run render -- --toc-depth 3 --margin 0.6
 ```
-node fetch-assets.mjs [--from N] [--to M] [--all] [--refresh]
 
-node render.mjs       [--from N] [--to M] [--all]
-                      [--out PATH]
-                      [--image-width IN]      figure width cap        (default 3.6)
-                      [--dpi-floor DPI]       never upscale past this (default 220)
-                      [--base-font PT]        body size               (default 10)
-                      [--margin IN]           page margin             (default 0.7)
-                      [--shift-blue HEX]      .bl label colour        (default #4A82D6)
-                      [--keep-whole-ratio R]  atomic-block threshold  (default 0.45)
-                      [--weld-ratio R]        widow-weld threshold    (default 0.25)
-                      [--no-toc]              skip the contents section
-                      [--toc-depth N]         1=chapters 2=+sections 3=+sub (default 2)
-                      [--no-page-numbers]     leave the margins clean
-                      [--dump-html]           write out/transformed.html for inspection
+**`build` and `build:full` do not.** npm appends forwarded arguments to the end of the whole
+script string, so `npm run build -- --all` expands to
+`node fetch-assets.mjs && node render.mjs --all` — the flag reaches only the render, which
+then wants images the fetch never downloaded. Call the two scripts directly when passing
+flags to both.
 
-node preview.mjs PDF [first] [last] [scale] [step]    rasterise pages to out/preview/
-```
+### `fetch-assets.mjs`
 
-`print.css` is authored at 10 pt / 0.7 in. `--base-font` and `--margin` are applied as an
+Downloads the manual and its assets into `cache/`.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--from N` | `1` | First chapter whose images to download |
+| `--to M` | `3` | Last chapter whose images to download |
+| `--all` | off | Every chapter — 222 images, about 3 MB. Overrides `--from`/`--to`. |
+| `--refresh` | off | Re-download even files already in `cache/` |
+
+The manual itself, both stylesheets and the Font Awesome webfont are always fetched; the
+range only governs images. Fetch at least the range you intend to render — `render.mjs`
+names any images it cannot find and exits non-zero.
+
+### `render.mjs`
+
+Prints a PDF from what is in `cache/`. Never touches the network.
+
+**Scope and output**
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--from N` | `1` | First chapter to include |
+| `--to M` | `3` | Last chapter to include |
+| `--all` | off | All 26 chapters. Overrides `--from`/`--to`. |
+| `--out PATH` | `out/dm32_user_manual_ch<from>-<to>.pdf`, or `…_full.pdf` with `--all` | Where to write |
+
+**Density and images**
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--base-font PT` | `10` | Body text size. Everything else scales in `em` from it. |
+| `--margin IN` | `0.7` | Page margin on all four sides. Also moves the print content box the measurement pass uses. |
+| `--image-width IN` | `3.6` | Width cap for figures |
+| `--dpi-floor DPI` | `220` | Never enlarge an image past this effective resolution. Raise it to shrink figures without touching the cap — `--dpi-floor 400` narrows every screenshot that would otherwise fall below 400 dpi. |
+| `--shift-blue HEX` | `#4A82D6` | Colour of the blue shift labels. `--shift-blue #97B6E6` restores the original web colour. |
+
+`print.css` is authored at 10 pt / 0.7 in. `--base-font` and `--margin` are injected as an
 override on top of it rather than replacing it, so the stylesheet and the flags cannot drift
 apart.
 
-Contents depth defaults to 2 — chapters plus sections, 149 entries over 3 pages. `--toc-depth 3`
-adds all 178 subsections, which runs to about 7 pages of contents.
+**Pagination tuning**
+
+Both are fractions of live page height (9.6 in at the default margin). See
+[Measured pagination](#measured-pagination) for why these are measured rather than blanket rules.
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--keep-whole-ratio R` | `0.45` | A figure, table, admonition or code block shorter than this is marked unbreakable. Anything taller stays breakable. Lower it if you see stranded space; raise it to split fewer blocks. |
+| `--weld-ratio R` | `0.25` | Weld a first/last list item or table row to its neighbour only when the resulting pair is under this. Lower it to weld less aggressively. |
+
+**Front matter**
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--toc-depth N` | `2` | `1` = chapters only (26 entries), `2` = + sections (149 entries, 3 pages), `3` = + subsections (all 178 more, about 7 pages) |
+| `--no-toc` | off | Omit the contents section. Also skips the second render pass, so it is roughly twice as fast. |
+| `--no-page-numbers` | off | Leave the bottom margin clean |
+
+With `--no-toc` the cover is the only front matter, so body page 1 is the second sheet.
+
+**Diagnostics**
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--dump-html` | off | Also write `out/transformed.html` — the fully restructured, measured DOM as Chrome saw it before printing. The first place to look when pagination surprises you. |
+
+### `preview.mjs`
+
+Rasterises pages of a finished PDF to `out/preview/` for eyeballing. Arguments are
+positional, not flags.
+
+```bash
+node preview.mjs <pdf> <first> <last> <scale> <step>
+```
+
+| Position | Default | Effect |
+|---|---|---|
+| 1 — `pdf` | `out/dm32_user_manual_ch1-3.pdf` | PDF to rasterise |
+| 2 — `first` | `1` | First page (1-based, physical sheet — not the printed number) |
+| 3 — `last` | `6` | Last page |
+| 4 — `scale` | `1.5` | Render scale; `1.0` is 96 dpi, `3` gives a legible zoom |
+| 5 — `step` | `1` | Sample every Nth page |
+
+```bash
+node preview.mjs out/dm32_user_manual_full.pdf 1 200 1.5 10   # every 10th page
+```
+
+### Environment variables
+
+| Variable | Effect |
+|---|---|
+| `PUPPETEER_EXECUTABLE_PATH` | Path to the browser binary. Checked before every built-in location, so it also overrides a Chrome that *was* found. |
+| `DM32_DEBUG` | Set to anything truthy for extra render diagnostics: every MathJax file served from `node_modules`, every MathJax `@font-face` with its load status, and the result of `document.fonts.check('16px MathJax_Math')`. |
+
+```bash
+PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium DM32_DEBUG=1 node render.mjs --all
+```
 
 ---
 

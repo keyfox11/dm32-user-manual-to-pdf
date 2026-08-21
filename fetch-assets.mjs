@@ -39,12 +39,24 @@ export function cachePathFor(url) {
 
 function parseArgs(argv) {
   const args = { from: 1, to: 3, all: false, refresh: false };
+  const unknown = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--all') args.all = true;
     else if (a === '--refresh') args.refresh = true;
     else if (a === '--from') args.from = Number(argv[++i]);
     else if (a === '--to') args.to = Number(argv[++i]);
+    else unknown.push(a);
+  }
+  /* A silently ignored --all here means a short render later fails on missing
+     images, a long way from the flag that actually caused it. */
+  if (unknown.length) {
+    const err = new Error(
+      `Unrecognised option${unknown.length > 1 ? 's' : ''}: ${unknown.join(' ')}\n` +
+        'See the Options section of README.md for the full list.',
+    );
+    err.usage = true; // a typo, not a crash -- print it without a stack trace
+    throw err;
   }
   return args;
 }
@@ -210,7 +222,8 @@ async function main() {
 
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('fetch-assets.mjs')) {
   main().catch((err) => {
-    console.error(err);
+    // Usage errors are the user mistyping a flag; a stack trace only buries the message.
+    console.error(err.usage ? err.message : err);
     process.exit(1);
   });
 }
