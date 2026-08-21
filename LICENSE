@@ -19,12 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This license covers the code in this repository only.
-
-The DM32 user manual itself is copyright SwissMicros GmbH and is NOT part of
-this repository. This software downloads it at runtime, into a local `cache/`
-directory that is excluded from version control, for the user's own private
-use. Neither the manual nor any PDF rendered from it is redistributed here.
