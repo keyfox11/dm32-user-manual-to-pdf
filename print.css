@@ -1,0 +1,539 @@
+/* ============================================================================
+   DM32 User Manual — print stylesheet for US Letter
+   ----------------------------------------------------------------------------
+   Injected after the site's own stylesheets, so it wins on cascade order for
+   equal specificity. Two rules in usermanuals.css need !important to beat:
+       ~line 314  a[href]:after { content: " (" attr(href) ")" }
+       ~line 336  img { max-width: 100% !important }
+
+   Classes marked "(render.mjs)" are applied by the DOM pass in render.mjs,
+   which can measure real rendered geometry that CSS alone cannot see.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------- 1. page  */
+
+@page {
+  size: Letter;
+  margin: 0.7in;
+}
+
+/* Live area is therefore 7.1in x 9.6in. */
+
+/* ------------------------------------------------------- 2. page breaks   */
+
+/*
+ * Every rule here is deliberate. In priority order:
+ *
+ *  a) A numbered chapter is the document's top-level unit, so it starts a page.
+ *  b) A heading must never be the last thing on a page, or the reader turns
+ *     over to find its content orphaned. The site CSS covers h2/h3 only; h4 is
+ *     used 178 times across the manual and needs the same protection.
+ *  c) This manual constantly writes "...as shown below:" immediately before a
+ *     screenshot. render.mjs tags those sentences .lead-in so they stay welded
+ *     to the thing they introduce.
+ *  d) Figures, admonitions, short tables and code blocks are atomic units --
+ *     but only when they actually fit on a page. render.mjs measures each one
+ *     and adds .keep-whole only to those under ~45% of page height, because
+ *     "avoid" on an over-tall element ejects it to a fresh page and leaves the
+ *     previous page half empty.
+ */
+
+/* (a) chapters start a new page */
+.sect1 {
+  page-break-before: always;
+  break-before: page;
+}
+
+/* (b) headings stay with the content they introduce */
+h1, h2, h3, h4, h5, h6 {
+  page-break-after: avoid;
+  break-after: avoid-page;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* (c) lead-in sentence stays welded to its figure/table/admonition (render.mjs) */
+.lead-in {
+  page-break-after: avoid;
+  break-after: avoid-page;
+}
+
+/* (d) atomic blocks, applied only where measured to fit (render.mjs) */
+.keep-whole {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* An image is never worth splitting across pages at any size. */
+.imageblock,
+.figure-para,
+img {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* Tables may break between rows, never mid-row, and repeat their header. */
+table.tableblock tr {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+table.tableblock thead {
+  display: table-header-group;
+}
+
+/*
+ * Widow/orphan control for lists and table rows (render.mjs).
+ *
+ * CSS `orphans`/`widows` only govern line boxes inside a single block, so they do
+ * nothing when a <ul> breaks between its <li> children -- which is how a lone
+ * bullet ends up stranded at the top of the next page. The cure is to forbid the
+ * break after the first item and before the last one, so a stray item always drags
+ * a neighbour along with it.
+ *
+ * This is applied as a measured class rather than as a blanket
+ * `li:first-child, li:nth-last-child(2)` rule, because a blanket rule silently
+ * makes every list of three or fewer items atomic. Harmless for a three-line
+ * bullet list; ruinous for a three-step procedure with a screenshot in each step.
+ * One such list, 8.4in tall, ejected itself onto a fresh page and stranded 5.5in
+ * of the previous one. render.mjs measures each pair and welds only where dragging
+ * the neighbour along is cheap.
+ *
+ * Short list items get .keep-whole the same way, so a tall item is free to break
+ * internally instead of being pushed whole.
+ */
+.weld-next {
+  page-break-after: avoid;
+  break-after: avoid-page;
+}
+
+p {
+  orphans: 3;
+  widows: 3;
+}
+
+/* --------------------------------------------------- 3. density / type    */
+
+html {
+  font-size: 10pt;
+}
+
+body {
+  /* The site's Theinhardt webfonts 404, so it already falls back to a system
+     sans. Naming the stack explicitly just makes output reproducible. */
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-size: 10pt;
+  line-height: 1.38;
+  color: #1a1a1a;
+  background: #fff;
+  margin: 0;
+  padding: 0;
+}
+
+#header, #content, #footnotes, #footer {
+  max-width: none;
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
+p {
+  margin: 0 0 6pt;
+}
+
+h2 {
+  font-size: 18pt;
+  font-weight: 700;
+  line-height: 1.15;
+  margin: 0 0 10pt;
+  padding-bottom: 4pt;
+  border-bottom: 0.75pt solid #c8c8c8;
+}
+
+h3 {
+  font-size: 13pt;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 14pt 0 5pt;
+}
+
+h4 {
+  font-size: 10.5pt;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #7a5f48; /* source colour, kept */
+  margin: 10pt 0 3pt;
+}
+
+h5 {
+  font-size: 10pt;
+  font-weight: 700;
+  margin: 8pt 0 3pt;
+}
+
+/* Asciidoctor wraps each block in a div; trim the stacked vertical margins. */
+.paragraph, .ulist, .olist, .dlist, .literalblock, .listingblock, .stemblock {
+  margin: 0 0 6pt;
+}
+
+ul, ol {
+  margin: 0 0 6pt;
+  padding-left: 1.6em;
+}
+
+li > p {
+  margin-bottom: 2pt;
+}
+
+.ulist .ulist, .olist .olist, .ulist .olist, .olist .ulist {
+  margin-top: 2pt;
+  margin-bottom: 2pt;
+}
+
+/* ------------------------------------------------------- 4. figures       */
+
+/*
+ * Block figures come through in two shapes:
+ *   <div class="imageblock"><div class="content"><img width="70%"></div></div>
+ *   <div class="paragraph"><p><span class="image"><img width="70%"></span></p></div>
+ * render.mjs tags the second shape .figure-para and sets an explicit inch width
+ * per image, capped so no image is ever enlarged past ~220 dpi of its own pixels.
+ * The cap below is the fallback for anything the DOM pass missed.
+ */
+
+.imageblock, .figure-para {
+  margin: 5pt 0;
+  text-align: center;
+}
+
+.imageblock > .content, .figure-para > p {
+  margin: 0;
+  line-height: 0; /* no half-leading around the figure's line box */
+}
+
+.imageblock img, .figure-para img {
+  max-width: 3.6in !important; /* beats usermanuals.css img{max-width:100%!important} */
+  height: auto !important;
+  /* Block, not inline: an inline image sits on a baseline and drags a descender's
+     worth of leading below it -- roughly 0.15in per figure, which over 30 figures
+     is most of a page of nothing. */
+  display: block;
+  margin: 0 auto;
+}
+
+/* Inline key/status icons keep their authored pixel size. */
+.image.inline img, img[width$="px"] {
+  max-width: none !important;
+  vertical-align: middle;
+  margin: 0 1pt;
+}
+
+/* ------------------------------------------------------- 5. tables        */
+
+table.tableblock {
+  font-size: 9pt;
+  line-height: 1.3;
+  border-collapse: collapse;
+  margin: 6pt 0;
+  width: 100% !important;
+}
+
+table.tableblock td, table.tableblock th {
+  padding: 2.5pt 5pt;
+  vertical-align: top;
+}
+
+table.tableblock p.tableblock {
+  margin: 0;
+  line-height: 1.3;
+}
+
+table.tableblock.grid-all td, table.tableblock.grid-all th {
+  border: 0.5pt solid #b9b9b9;
+}
+
+table.tableblock th {
+  background: #f2f2f2;
+  font-weight: 700;
+  text-align: left;
+}
+
+/* Program listings rendered as 2-column monospace tables. */
+table.custom tr > td:first-child {
+  font-family: Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 8.5pt;
+}
+
+/* ------------------------------------------------------- 6. admonitions   */
+
+/* Asciidoctor builds NOTE/TIP/WARNING as a 2-column table, not a div.
+   The source design is: no background, an orange Font Awesome glyph in a narrow
+   left cell, and a warm-grey rule down the content edge. Kept as-is; only the
+   proportions are rescaled from an 18px screen body to a 10pt print body. */
+.admonitionblock {
+  margin: 7pt 0;
+}
+
+.admonitionblock > table {
+  border: 0;
+  background: none;
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0;
+}
+
+.admonitionblock > table td.icon {
+  width: 0.34in;
+  text-align: center;
+  padding: 0 5pt 0 0;
+  vertical-align: top;
+}
+
+/* Site CSS sizes this glyph at 2.5em of the cell, which is far too large at
+   print scale; set the rendered size directly. */
+.admonitionblock td.icon [class^="fa icon-"]:before {
+  font-size: 13pt;
+  line-height: 1.15;
+}
+
+.admonitionblock > table td.content {
+  padding: 0 0 0 8pt;
+  border-left: 2pt solid #dbd3cc;
+  font-size: 9.5pt;
+}
+
+.admonitionblock > table td.content > :last-child {
+  margin-bottom: 0;
+}
+
+/* -------------------------------------------------- 7. code, math, keys   */
+
+pre, code, .literalblock pre, .listingblock pre {
+  font-family: Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 8.5pt;
+  line-height: 1.3;
+}
+
+.literalblock pre, .listingblock pre {
+  background: #f7f7f7;
+  border: 0.5pt solid #ddd;
+  padding: 4pt 6pt;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Display maths. MathJax typesets these in place (see render.mjs); the italic
+   applies only to the plain-text fallback used when MathJax cannot load, since
+   MathJax sets its own font styles on the output it generates. The slightly
+   larger font-size gives display maths its emphasis -- MathJax sizes itself in
+   em, so it scales with this. */
+.stemblock {
+  text-align: center;
+  font-style: italic;
+  font-size: 10.5pt;
+  margin: 7pt 0;
+}
+.stemblock > .content {
+  margin: 0;
+}
+.stemblock .MathJax_CHTML,
+.stemblock .MathJax {
+  font-style: normal;
+}
+
+/* Key chips (.button) are white-on-dark: they require printBackground:true. */
+.button {
+  font-size: 8.5pt;
+  padding: 0.5pt 3.5pt;
+}
+
+/*
+ * Blue-shifted function labels. The source uses #97B6E6, which is the colour of
+ * the physical shift key and reads fine backlit on a screen, but is washed out as
+ * bold 10pt text on white paper.
+ *
+ * Same hue (~216deg) and saturation, raised to the lightness of the orange it sits
+ * beside: #4A82D6 is L56% against #F99A2B's L57%, so blue and orange labels carry
+ * equal weight on the page the way the source intends. (An earlier #2B69CA held the
+ * hue but sat at L48% -- 5.3:1 on white against the orange's 2.2:1, which made every
+ * blue label shout over its orange neighbours.)
+ *
+ * The .bls swatches are left at the hardware colour deliberately -- they are
+ * pictures of the key itself, and must keep matching the keypad photographs.
+ */
+.bl {
+  color: #4A82D6;
+}
+
+/* --------------------------------------------- 8. site-CSS neutralisation */
+
+/* Kill the fixed left-hand TOC sidebar and the tocify container. */
+#toc, #toctitle, #generated-toc {
+  display: none !important;
+}
+
+/* Do not append "(https://...)" after every link. */
+a[href]:after, abbr[title]:after {
+  content: "" !important;
+}
+
+/* Cross-references stay clickable in the PDF without looking like web links;
+   external links keep a subtle mark so the reader knows they lead off-document. */
+a, a:visited {
+  color: inherit;
+  text-decoration: none;
+}
+a[href^="http"] {
+  color: #14507d;
+  text-decoration: underline;
+}
+
+/* The site print block boxes these; we style them ourselves above. */
+pre, blockquote {
+  border: 0;
+}
+
+/* -------------------------------------------------------- 9. title page   */
+
+.dm32-title-page {
+  page-break-after: always;
+  break-after: page;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  text-align: center;
+  padding-top: 2.6in;
+}
+
+.dm32-title-page .brand {
+  font-size: 12pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #666;
+  margin-bottom: 0.35in;
+}
+
+.dm32-title-page h1 {
+  font-size: 34pt;
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0 0 0.18in;
+  border: 0;
+  padding: 0;
+}
+
+.dm32-title-page .rule {
+  width: 2.4in;
+  height: 1.5pt;
+  background: #1a1a1a;
+  margin: 0.22in auto 0.3in;
+}
+
+.dm32-title-page .version {
+  font-size: 11pt;
+  color: #333;
+  margin-bottom: 0.5in;
+}
+
+.dm32-title-page .scope {
+  font-size: 10.5pt;
+  color: #1a1a1a;
+  margin-bottom: 0.14in;
+}
+
+.dm32-title-page .scope-list {
+  font-size: 10pt;
+  color: #444;
+  line-height: 1.6;
+  margin-bottom: 0.55in;
+}
+
+/* Empty on a full render, where the list would be 26 lines long. */
+.dm32-title-page .scope-list:empty {
+  margin-bottom: 0;
+}
+
+.dm32-title-page .provenance {
+  font-size: 8.5pt;
+  color: #777;
+  line-height: 1.5;
+}
+
+.dm32-title-page .provenance a {
+  color: #777;
+  text-decoration: none;
+}
+
+/* ------------------------------------------------------- 10. contents    */
+
+/*
+ * Page numbers here are filled in by a second render pass (see pdf-tools.mjs):
+ * where a heading lands is only knowable after Chrome has paginated. The number
+ * column is fixed-width so that swapping placeholders for real numbers cannot
+ * change how the contents themselves paginate.
+ */
+
+.dm32-toc {
+  page-break-after: always;
+  break-after: page;
+}
+
+.dm32-toc .toc-heading {
+  font-size: 18pt;
+  font-weight: 700;
+  margin: 0 0 12pt;
+  padding-bottom: 4pt;
+  border-bottom: 0.75pt solid #c8c8c8;
+}
+
+.dm32-toc .toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dm32-toc .toc-list li {
+  margin: 0;
+}
+
+.dm32-toc a {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+  text-decoration: none;
+  color: inherit;
+}
+
+.dm32-toc .toc-dots {
+  flex: 1 1 auto;
+  border-bottom: 0.5pt dotted #b4b4b4;
+  transform: translateY(-0.22em);
+}
+
+.dm32-toc .toc-page {
+  flex: 0 0 auto;
+  min-width: 2.4em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #555;
+}
+
+.dm32-toc .toc-l1 {
+  margin-top: 7pt;
+  font-size: 10.5pt;
+  font-weight: 700;
+}
+
+.dm32-toc .toc-l1 .toc-title {
+  color: #7a5f48;
+}
+
+.dm32-toc .toc-l2 {
+  padding-left: 1.3em;
+  font-size: 9.5pt;
+}
+
+.dm32-toc .toc-l3 {
+  padding-left: 2.8em;
+  font-size: 9pt;
+  color: #444;
+}

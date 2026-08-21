@@ -1,0 +1,13 @@
+node_modules/
+
+# Local mirror of the SwissMicros manual and its assets. Regenerate with
+# `node fetch-assets.mjs`. Not committed: it is someone else's copyrighted
+# document, and it is reproducible from the source URL anyway.
+cache/
+
+# Rendered PDFs and preview rasters. Same reasoning -- build them, don't ship them.
+out/
+
+npm-debug.log*
+.DS_Store
+Thumbs.db

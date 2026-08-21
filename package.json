@@ -1,0 +1,33 @@
+{
+  "name": "dm32-user-manual-to-pdf",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Render the SwissMicros DM32 HTML user manual to a typeset US Letter PDF",
+  "license": "MIT",
+  "keywords": [
+    "swissmicros",
+    "dm32",
+    "hp-32s",
+    "rpn",
+    "calculator",
+    "pdf",
+    "asciidoctor",
+    "puppeteer"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "fetch": "node fetch-assets.mjs",
+    "render": "node render.mjs",
+    "build": "node fetch-assets.mjs && node render.mjs",
+    "build:full": "node fetch-assets.mjs --all && node render.mjs --all",
+    "preview": "node preview.mjs"
+  },
+  "dependencies": {
+    "mathjax": "^2.7.9",
+    "pdf-lib": "^1.17.1",
+    "puppeteer-core": "^24.0.0"
+  }
+}
