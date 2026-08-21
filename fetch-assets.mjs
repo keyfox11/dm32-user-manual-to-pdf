@@ -41,24 +41,39 @@ function parseArgs(argv) {
   // null bounds mean unlimited, so the default is every chapter's images.
   const args = { from: null, to: null, refresh: false };
   const unknown = [];
+  const fail = (msg) => {
+    const err = new Error(`${msg}\nSee the Options section of README.md for the full list.`);
+    err.usage = true; // a mistake at the command line, not a crash -- no stack trace
+    throw err;
+  };
+  const num = (flag, i) => {
+    const raw = argv[i];
+    if (raw === undefined) fail(`${flag} expects a chapter number, but none was given.`);
+    if (raw.startsWith('--')) fail(`${flag} expects a chapter number, but was followed by ${raw}.`);
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 1) {
+      fail(`${flag} expects a whole chapter number of 1 or more, got "${raw}".`);
+    }
+    return n;
+  };
+
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     // --all is the default; accepted so saying it explicitly is not an error.
     if (a === '--all') (args.from = null), (args.to = null);
     else if (a === '--refresh') args.refresh = true;
-    else if (a === '--from') args.from = Number(argv[++i]);
-    else if (a === '--to') args.to = Number(argv[++i]);
+    else if (a === '--from') args.from = num(a, ++i);
+    else if (a === '--to') args.to = num(a, ++i);
     else unknown.push(a);
   }
-  /* A silently ignored --all here means a short render later fails on missing
-     images, a long way from the flag that actually caused it. */
+
+  /* A silently ignored flag here means a render later fails on missing images,
+     a long way from the argument that actually caused it. */
   if (unknown.length) {
-    const err = new Error(
-      `Unrecognised option${unknown.length > 1 ? 's' : ''}: ${unknown.join(' ')}\n` +
-        'See the Options section of README.md for the full list.',
-    );
-    err.usage = true; // a typo, not a crash -- print it without a stack trace
-    throw err;
+    fail(`Unrecognised option${unknown.length > 1 ? 's' : ''}: ${unknown.join(' ')}`);
+  }
+  if (args.from !== null && args.to !== null && args.from > args.to) {
+    fail(`--from ${args.from} is after --to ${args.to}, so no chapters are selected.`);
   }
   return args;
 }

@@ -86,37 +86,84 @@ function parseArgs(argv) {
     dumpHtml: false,
   };
   const unknown = [];
+  const fail = (msg) => {
+    const err = new Error(`${msg}\nSee the Options section of README.md for the full list.`);
+    err.usage = true; // a mistake at the command line, not a crash -- no stack trace
+    throw err;
+  };
+
+  /* A flag that wants a value but was handed none used to sail through and do
+     something quietly wrong: a bare --toc-depth made Number(undefined) NaN,
+     which sliced the heading list to nothing and emptied the contents. That is
+     easy to hit by accident, because an unquoted #4A82D6 is a comment in most
+     shells, so --shift-blue #4A82D6 arrives here as a bare --shift-blue. */
+  const value = (flag, i) => {
+    const v = argv[i];
+    if (v === undefined) fail(`${flag} expects a value, but none was given.`);
+    if (v.startsWith('--')) fail(`${flag} expects a value, but was followed by ${v}.`);
+    return v;
+  };
+  const num = (flag, i) => {
+    const raw = value(flag, i);
+    const n = Number(raw);
+    if (!Number.isFinite(n)) fail(`${flag} expects a number, got "${raw}".`);
+    return n;
+  };
+  const colour = (flag, i) => {
+    const raw = value(flag, i);
+    if (!/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(raw)) {
+      fail(
+        `${flag} expects a hex colour like "#4A82D6", got "${raw}".\n` +
+          'Quote it -- an unquoted # starts a comment in most shells.',
+      );
+    }
+    return raw;
+  };
+
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     // --all is what you already get by default; kept so it is not an error to say so.
     if (k === '--all') (a.from = null), (a.to = null);
     else if (k === '--dump-html') a.dumpHtml = true;
-    else if (k === '--from') a.from = Number(argv[++i]);
-    else if (k === '--to') a.to = Number(argv[++i]);
-    else if (k === '--out') a.out = argv[++i];
-    else if (k === '--image-width') a.imageWidth = Number(argv[++i]);
-    else if (k === '--dpi-floor') a.dpiFloor = Number(argv[++i]);
-    else if (k === '--keep-whole-ratio') a.keepWholeRatio = Number(argv[++i]);
-    else if (k === '--weld-ratio') a.weldRatio = Number(argv[++i]);
-    else if (k === '--base-font') a.baseFont = Number(argv[++i]);
-    else if (k === '--margin') a.margin = Number(argv[++i]);
-    else if (k === '--shift-blue') a.shiftBlue = argv[++i];
+    else if (k === '--from') a.from = num(k, ++i);
+    else if (k === '--to') a.to = num(k, ++i);
+    else if (k === '--out') a.out = value(k, ++i);
+    else if (k === '--image-width') a.imageWidth = num(k, ++i);
+    else if (k === '--dpi-floor') a.dpiFloor = num(k, ++i);
+    else if (k === '--keep-whole-ratio') a.keepWholeRatio = num(k, ++i);
+    else if (k === '--weld-ratio') a.weldRatio = num(k, ++i);
+    else if (k === '--base-font') a.baseFont = num(k, ++i);
+    else if (k === '--margin') a.margin = num(k, ++i);
+    else if (k === '--shift-blue') a.shiftBlue = colour(k, ++i);
     else if (k === '--no-toc') a.toc = false;
-    else if (k === '--toc-depth') a.tocDepth = Number(argv[++i]);
+    else if (k === '--toc-depth') a.tocDepth = num(k, ++i);
     else if (k === '--no-page-numbers') a.pageNumbers = false;
     else unknown.push(k);
   }
+
   /* Refuse rather than ignore. With this many flags a typo is easy, and silently
      dropping one produces a plausible-looking PDF built to the wrong settings --
      the worst kind of wrong, because nothing about the output says so. */
   if (unknown.length) {
-    const err = new Error(
-      `Unrecognised option${unknown.length > 1 ? 's' : ''}: ${unknown.join(' ')}\n` +
-        'See the Options section of README.md for the full list.',
-    );
-    err.usage = true; // a typo, not a crash -- print it without a stack trace
-    throw err;
+    fail(`Unrecognised option${unknown.length > 1 ? 's' : ''}: ${unknown.join(' ')}`);
   }
+
+  /* Out-of-range values that would otherwise degrade silently rather than fail. */
+  for (const [flag, v] of [['--from', a.from], ['--to', a.to]]) {
+    if (v !== null && (!Number.isInteger(v) || v < 1)) {
+      fail(`${flag} expects a whole chapter number of 1 or more, got ${v}.`);
+    }
+  }
+  if (a.from !== null && a.to !== null && a.from > a.to) {
+    fail(`--from ${a.from} is after --to ${a.to}, so no chapters are selected.`);
+  }
+  if (![1, 2, 3].includes(a.tocDepth)) {
+    fail(`--toc-depth expects 1, 2 or 3, got ${a.tocDepth}.`);
+  }
+  if (a.margin < 0 || a.margin >= 5) fail(`--margin ${a.margin} leaves no room for text.`);
+  if (a.baseFont <= 0) fail(`--base-font must be positive, got ${a.baseFont}.`);
+  if (a.imageWidth <= 0) fail(`--image-width must be positive, got ${a.imageWidth}.`);
+
   return a;
 }
 

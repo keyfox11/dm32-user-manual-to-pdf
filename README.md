@@ -75,6 +75,21 @@ Everything both scripts accept is listed below. Anything else is **rejected, not
 a mistyped flag fails immediately rather than silently producing a plausible-looking PDF
 built to the wrong settings.
 
+The placeholder after a flag says what kind of value it wants:
+
+| Placeholder | Expects | Example |
+|---|---|---|
+| `N`, `M` | a whole number | `--to 3` |
+| `IN` | a length in inches | `--margin 0.65` |
+| `PT` | a length in points | `--base-font 9.5` |
+| `DPI` | a resolution in dots per inch | `--dpi-floor 400` |
+| `R` | a ratio between 0 and 1 | `--weld-ratio 0.25` |
+| `HEX` | a CSS hex colour | `--shift-blue "#4A82D6"` |
+| `PATH` | a file path | `--out out/manual.pdf` |
+
+Flags with no placeholder are switches and take no value. Quote hex colours — an unquoted
+`#` starts a comment in most shells and the rest of the line disappears.
+
 ### npm scripts
 
 | Script | Runs | Output |
@@ -108,8 +123,8 @@ Downloads the manual and its assets into `cache/`.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--from N` | first chapter | Start of the range. Given alone, runs to the end of the manual. |
-| `--to M` | last chapter | End of the range. Given alone, starts at chapter 1. |
+| `--from N` | `1` | Chapter number to start at. Given alone, runs to the end of the manual. |
+| `--to M` | `26` | Chapter number to stop after. Given alone, starts at chapter 1. |
 | `--all` | — | Every chapter. This is already the default; accepted so that saying it explicitly is not an error. |
 | `--refresh` | off | Re-download even files already in `cache/` |
 
@@ -127,8 +142,8 @@ Prints a PDF from what is in `cache/`. Never touches the network.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--from N` | first chapter | First chapter to include. Given alone, runs to the end. |
-| `--to M` | last chapter | Last chapter to include. Given alone, starts at chapter 1. |
+| `--from N` | `1` | Chapter number to start at. Given alone, runs to the end. |
+| `--to M` | `26` | Chapter number to stop after. Given alone, starts at chapter 1. |
 | `--all` | — | All 26 chapters. Already the default; accepted so saying it explicitly is not an error. |
 | `--out PATH` | `out/dm32_user_manual.pdf`, or `…_ch<from>-<to>.pdf` for a slice | Where to write |
 
@@ -145,7 +160,7 @@ an empty PDF.
 | `--margin IN` | `0.7` | Page margin on all four sides. Also moves the print content box the measurement pass uses. |
 | `--image-width IN` | `3.6` | Width cap for figures |
 | `--dpi-floor DPI` | `220` | Never enlarge an image past this effective resolution. Raise it to shrink figures without touching the cap — `--dpi-floor 400` narrows every screenshot that would otherwise fall below 400 dpi. |
-| `--shift-blue HEX` | `#4A82D6` | Colour of the blue shift labels. `--shift-blue #97B6E6` restores the original web colour. |
+| `--shift-blue HEX` | `#4A82D6` | Colour of the blue shift labels. `--shift-blue "#97B6E6"` restores the original web colour. |
 
 `print.css` is authored at 10 pt / 0.7 in. `--base-font` and `--margin` are injected as an
 override on top of it rather than replacing it, so the stylesheet and the flags cannot drift
@@ -420,7 +435,7 @@ already downloaded is skipped.
 - Blue shift labels (`.bl`) are the one colour that departs from the source. Bold 10 pt
   `#97B6E6` is washed out on white paper, so it moves to `#4A82D6` — same hue and saturation,
   raised to the *lightness of the orange it sits beside* (L56% against `#F99A2B`'s L57%) so the
-  two label colours carry equal weight on the page. Pass `--shift-blue #97B6E6` for the original.
+  two label colours carry equal weight on the page. Pass `--shift-blue "#97B6E6"` for the original.
   The `.bls` swatches keep the original colour deliberately: they are pictures of the physical
   key and need to match the keypad photographs.
 
