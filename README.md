@@ -25,6 +25,8 @@ fall where a typesetter would put them rather than wherever the text happened to
 - **Typeset equations.** The manual's 544 AsciiMath expressions go through MathJax, so they
   look the way they do on the website rather than degrading to raw markup.
 - **Faithful colour** — the manual's brown headings and orange/blue shift labels are kept.
+- **A monochrome build** — `--greyscale` re-encodes the shift markers as patterned shapes
+  and converts every figure, for e-ink readers and laser printers. See [Greyscale](#greyscale).
 
 ## Requirements
 
@@ -381,7 +383,8 @@ node render.mjs --greyscale
 
 Writes `out/dm32_user_manual_grey.pdf`, leaving any colour build beside it. Intended for
 e-ink readers, monochrome laser printers and photocopies. Pagination is identical to the
-colour build — same 200 pages.
+colour build — same 200 pages — and the render takes about twice as long, since every
+figure is converted pixel by pixel.
 
 **Why this is not just desaturation.** The manual says which shift prefix a function needs
 using colour and nothing else — orange `.or` for one shift key, blue `.bl` for the other,
@@ -419,13 +422,53 @@ slot because `▲` is labelled `.or` 16 times and `.br` 63 times. Headings, key 
 admonition icons and external links are also neutralised, each to the grey of its own
 luminance so the page keeps its existing tonal hierarchy and only the hue leaves.
 
-Figures are left alone deliberately — `filter: grayscale(1)` on `img` re-rasterises the
-screenshots down from 1241 px to 1084 px, and Chrome already emits most of them as
-`DeviceGray` because the source PNGs are greyscale to begin with.
+### The shift keys themselves
 
-**What this cannot fix:** the keypad photographs are colour, and they show the orange and
-blue shift keys. Greyscaled, those two keys are similar tones, so the photographs cannot
-tell you which shift key is which — only the text labels can.
+Separately from the labels, the manual drops the shift *key* into running text as a blank
+coloured rectangle — `.ors` and `.bls`, 14 of them, containing nothing but four `&nbsp;`.
+Two filled chips at different greys only work side by side, and these appear singly,
+mid-sentence, with nothing to compare against. So they become hollow and take a pattern:
+
+| Marker | Shift key | Greyscale |
+|---|---|---|
+| `.ors` | orange, left-shift (LS) | hollow box, diagonal hatching |
+| `.bls` | blue, right-shift (RS) | hollow box, dot grid |
+
+Stripes against dots rather than two stripe angles — a categorical difference rather than
+a matter of degree, so one seen alone still identifies itself. At roughly 66×56 device
+pixels on a 226 dpi panel, a 4 px pattern period resolves cleanly.
+
+### Two things the render rewrites
+
+Restyling alone would leave the document contradicting itself, so `--greyscale` also edits
+four phrases of the manual's text:
+
+- Chapter 1's notation table says the markers are **"a blue rectangle"** and **"an orange
+  rectangle"**. Those become "a dotted rectangle" and "a hatched rectangle".
+- Twice, **"depicted by their color label"** becomes "depicted by their label".
+
+Nothing else moves. Every other mention of orange and blue refers to the physical shift
+keys, which are those colours whatever this PDF looks like. The render reports how many
+phrases it changed and warns if any original survives — a leftover means upstream reworded
+something and the legend no longer matches what is drawn.
+
+A **greyscale key** is also added to the title page, built from the real classes so it
+cannot drift out of step with the body text. The colour build has no key and needs none.
+
+### Figures
+
+Every figure is converted too, but in `render.mjs` rather than in CSS. `filter:
+grayscale(1)` is the obvious way and it is a trap: the filter makes Chrome re-rasterise at
+layout resolution, which took the screenshots from 1241 px down to 1084 px. Instead each
+image is redrawn through a canvas at `naturalWidth`, weighting Rec. 709 luminance in
+linear light, so every source pixel survives — verified identical to the colour build at
+1481 px max, 1241 px median. Images already greyscale are detected and skipped rather than
+re-encoded.
+
+**What this cannot fix:** the keypad photographs show the orange and blue shift keys, and
+greyscaled those two keys are similar tones. The photographs cannot tell you which shift
+key is which — only the text markers can, which is why they are patterned rather than
+merely toned.
 
 ## Tuning density
 

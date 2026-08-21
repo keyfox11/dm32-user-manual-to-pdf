@@ -340,7 +340,7 @@ async function main() {
       const report = await page.evaluate((opts) => {
         const { from, to, imageWidth, dpiFloor, greyscale } = opts;
         const content = document.querySelector('#content');
-        const stats = { figures: 0, leadIns: 0, images: [], stems: 0, dropped: 0, mathTypeset: 0 };
+        const stats = { figures: 0, leadIns: 0, images: [], stems: 0, dropped: 0, mathTypeset: 0, legendFixed: 0, legendMissed: 0 };
 
         /* ---- strip page furniture -------------------------------------- */
         document.querySelectorAll('script').forEach((s) => s.remove());
@@ -378,6 +378,45 @@ async function main() {
         });
         const complete = kept.length === chapters.length;
 
+        /* Chapter 1 is the manual's own notation legend, and it says the shift
+           markers are "a blue rectangle" and "an orange rectangle". Greyscale
+           draws them as a dot grid and diagonal hatching, so left as written the
+           legend would describe something the reader cannot see anywhere in the
+           document -- the one place where restyling alone produces a page that
+           contradicts itself.
+
+           Only these two phrases move. Every other mention of orange and blue in
+           the manual refers to the physical shift keys, which really are those
+           colours whatever this PDF looks like. */
+        if (greyscale) {
+          const swaps = [
+            ['a blue rectangle', 'a dotted rectangle'],
+            ['an orange rectangle', 'a hatched rectangle'],
+            /* Twice: "shifted function calls are depicted by their color label".
+               Dropping one word is enough to stop it being false; what upright
+               and italic now mean is explained by the key on the title page
+               rather than by putting more words in the author's mouth. */
+            ['their color label', 'their label'],
+          ];
+          const walk = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+          for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+            for (const [from, to] of swaps) {
+              if (n.nodeValue.includes(from)) {
+                n.nodeValue = n.nodeValue.replaceAll(from, to);
+                stats.legendFixed++;
+              }
+            }
+          }
+
+          /* How many phrases exist depends on the chapter range, so a fixed
+             expected count would be wrong for every partial render. The
+             invariant that does hold at any range: none of the originals should
+             survive. A leftover means the phrase is split across element
+             boundaries, where a text-node walk cannot see it whole. */
+          const text = content.textContent;
+          stats.legendMissed = swaps.filter(([from]) => text.includes(from)).length;
+        }
+
         /* ---- generated title page --------------------------------------- */
         const scopeLine = complete
           ? `Complete manual — ${kept.length} chapters`
@@ -400,7 +439,27 @@ async function main() {
             Retrieved ${opts.retrieved} · Typeset for US Letter${
               greyscale ? ' · Greyscale' : ''
             }
-          </div>`;
+          </div>
+          ${
+            /* Built from the real classes, so each row is rendered by the same
+               rules as the body text and cannot drift out of step with it. The
+               colour build needs no key -- orange and blue explain themselves. */
+            greyscale
+              ? `<table class="dm32-grey-key">
+                   <tr><td colspan="2" class="key-title">Greyscale key</td></tr>
+                   <tr><td><span class="ors">&#160;&#160;&#160;&#160;</span></td>
+                       <td>orange shift key &mdash; left-shift, LS</td></tr>
+                   <tr><td><span class="bls">&#160;&#160;&#160;&#160;</span></td>
+                       <td>blue shift key &mdash; right-shift, RS</td></tr>
+                   <tr><td><span class="or">CLEAR</span></td>
+                       <td>function on the orange shift</td></tr>
+                   <tr><td><span class="bl">SOLVE</span></td>
+                       <td>function on the blue shift</td></tr>
+                   <tr><td><span class="br">x</span></td>
+                       <td>stack register</td></tr>
+                 </table>`
+              : ''
+          }`;
         content.prepend(cover);
 
         /* ---- table of contents ------------------------------------------
@@ -548,6 +607,93 @@ async function main() {
         throw err;
       }
 
+      /* ---- greyscale the figures -------------------------------------------
+         Done pixel-by-pixel through a canvas at each image's natural size, not
+         with `filter: grayscale(1)`. The CSS filter makes Chrome re-rasterise at
+         layout resolution, which cost the screenshots 1241px -> 1084px; redrawing
+         at naturalWidth keeps every pixel the source shipped.
+
+         Runs after the chapter drop so it only touches figures that survive. */
+      const greyed = args.greyscale
+        ? await page.evaluate(async () => {
+            const imgs = [...document.querySelectorAll('#content img')];
+            const stats = { converted: 0, alreadyGrey: 0, failed: 0, pixels: 0 };
+
+            /* Per-pixel pow() over ~100M pixels is far too slow, so both gamma
+               conversions become lookups: 256 entries in, 4096 steps out. */
+            const toLinear = new Float32Array(256);
+            for (let i = 0; i < 256; i++) {
+              const c = i / 255;
+              toLinear[i] = c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+            }
+            const STEPS = 4096;
+            const toSrgb = new Uint8Array(STEPS + 1);
+            for (let i = 0; i <= STEPS; i++) {
+              const c = i / STEPS;
+              const v = c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055;
+              toSrgb[i] = Math.round(v * 255);
+            }
+
+            for (const img of imgs) {
+              try {
+                if (!img.complete) await img.decode();
+                const w = img.naturalWidth;
+                const h = img.naturalHeight;
+                if (!w || !h) {
+                  stats.failed++;
+                  continue;
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                ctx.drawImage(img, 0, 0);
+                const data = ctx.getImageData(0, 0, w, h);
+                const px = data.data;
+
+                /* Most of these PNGs are greyscale already -- re-encoding them
+                   would spend time and PNG size to change nothing. */
+                let chromatic = false;
+                for (let i = 0; i < px.length; i += 4) {
+                  if (px[i] !== px[i + 1] || px[i + 1] !== px[i + 2]) {
+                    chromatic = true;
+                    break;
+                  }
+                }
+                if (!chromatic) {
+                  stats.alreadyGrey++;
+                  continue;
+                }
+
+                /* Rec. 709 luminance, weighted in linear light rather than on the
+                   gamma-encoded values the CSS filter uses. Costs one extra pair
+                   of table lookups and keeps the midtones off the source photo. */
+                for (let i = 0; i < px.length; i += 4) {
+                  const y =
+                    0.2126 * toLinear[px[i]] +
+                    0.7152 * toLinear[px[i + 1]] +
+                    0.0722 * toLinear[px[i + 2]];
+                  const v = toSrgb[(y * STEPS + 0.5) | 0];
+                  px[i] = px[i + 1] = px[i + 2] = v;
+                }
+                ctx.putImageData(data, 0, 0);
+
+                const url = canvas.toDataURL('image/png');
+                await new Promise((resolve, reject) => {
+                  img.onload = resolve;
+                  img.onerror = reject;
+                  img.src = url;
+                });
+                stats.converted++;
+                stats.pixels += w * h;
+              } catch {
+                stats.failed++;
+              }
+            }
+            return stats;
+          })
+        : null;
+
       const measured = await page.evaluate((liveHeightPx, ratio, weldRatio) => {
         const limit = liveHeightPx * ratio;
         const weldMax = liveHeightPx * weldRatio;
@@ -670,7 +816,7 @@ async function main() {
 
       await page.close();
       return {
-        pdf, report, measured, math, links, failedImages,
+        pdf, report, measured, math, links, failedImages, greyed,
         blocked, mathjaxServed, mathjaxMissing,
       };
     };
@@ -746,7 +892,7 @@ async function main() {
     await writeFile(outPath, finalBytes);
 
     const {
-      report, measured, math, links, failedImages, blocked, mathjaxServed, mathjaxMissing,
+      report, measured, math, links, failedImages, greyed, blocked, mathjaxServed, mathjaxMissing,
     } = result;
 
     /* ---- report ------------------------------------------------------ */
@@ -764,6 +910,20 @@ async function main() {
     console.log(`   delimiter fallback used    ${report.stats.stems}`);
     console.log(`   MathJax files served       ${mathjaxServed.size} from node_modules`);
     console.log(`   chapters dropped           ${report.stats.dropped}`);
+    if (greyed) {
+      const mpx = (greyed.pixels / 1e6).toFixed(1);
+      console.log(
+        `   figures greyscaled         ${greyed.converted} (${mpx} Mpx), ` +
+          `${greyed.alreadyGrey} already grey` +
+          (greyed.failed ? `, ${greyed.failed} FAILED` : ''),
+      );
+      console.log(
+        `   legend phrases rewritten   ${report.stats.legendFixed}` +
+          (report.stats.legendMissed
+            ? `  (${report.stats.legendMissed} STILL DESCRIBE COLOUR -- see chapter 1)`
+            : ''),
+      );
+    }
     console.log(`\nPagination:`);
     console.log(`   blocks kept whole          ${measured.kept} (fit under ${measured.limitIn}in)`);
     console.log(`   list items kept whole      ${measured.items}`);

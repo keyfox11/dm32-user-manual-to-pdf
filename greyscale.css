@@ -66,23 +66,38 @@
 }
 
 /*
- * The .ors / .bls swatches are filled chips standing in for the physical keys.
- * print.css leaves them at the hardware colour so they match the keypad
- * photographs; here the photographs are greyscale too, so the chips follow the
- * same black/mid-grey split as the text labels above. White text, since both
- * backgrounds are now too dark for the black the source sets.
+ * The .ors / .bls swatches are the shift keys themselves, inline in the text:
+ * blank rectangles -- all 14 of them contain nothing but four &nbsp; -- that
+ * stand in for the physical key, and in the colour build are simply orange or
+ * blue. Tone alone cannot carry that. Two filled chips at different greys are
+ * only distinguishable side by side, and these almost always appear singly,
+ * mid-sentence, with nothing to compare against.
+ *
+ * So they become hollow and take a pattern instead. Stripes against dots rather
+ * than two stripe angles: a categorical difference, not a matter of degree, so
+ * one seen alone still identifies itself. There is no text to compete with, and
+ * at ~66x56 device pixels on a 226dpi panel a 4px period resolves cleanly.
  */
-.ors {
-  background-color: #000000 !important;
-  border-color: #000000 !important;
-  color: #ffffff !important;
+.ors,
+.bls {
+  background-color: #ffffff !important;
+  border: 0.75pt solid #000000 !important;
+  color: transparent !important;
 }
 
+/* Orange shift: diagonal hatching. */
+.ors {
+  background-image: repeating-linear-gradient(
+    45deg,
+    #000000 0 1.5px,
+    #ffffff 1.5px 4px
+  ) !important;
+}
+
+/* Blue shift: a dot grid. */
 .bls {
-  background-color: #5a5a5a !important;
-  border-color: #5a5a5a !important;
-  color: #ffffff !important;
-  font-style: italic;
+  background-image: radial-gradient(#000000 1px, #ffffff 1.2px) !important;
+  background-size: 4px 4px !important;
 }
 
 /* ----------------------------------------------------- 2. remaining colour */
@@ -131,21 +146,45 @@ a[href^="http"] {
   border-left-color: #d4d4d4;
 }
 
-/* ------------------------------------------------ 3. what is NOT done here
+/* --------------------------------------------- 3. the key on the title page
  *
- * The figures are deliberately left alone. `filter: grayscale(1)` on img is the
- * obvious addition and it is a trap: the filter forces Chrome to re-rasterise
- * at layout resolution, which took the screenshots from their native 1241px
- * down to 1084px -- 345 DPI to 301 DPI at a 3.6in placement. The output file
- * got 13% smaller, which looks like a win until you notice the saving is
- * discarded pixels rather than better compression.
+ * The colour build needs no key: orange and blue name themselves, and chapter
+ * 1's notation table already explains them. Greyscale substitutes conventions a
+ * reader has no way to guess, and the complaint that drove this -- seeing one
+ * marker alone and not knowing which shift it means -- is answered by having
+ * somewhere to look it up.
+ */
+.dm32-grey-key {
+  margin: 2.2em auto 0;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+  color: #444444;
+}
+
+.dm32-grey-key .key-title {
+  padding-bottom: 0.5em;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #646464;
+}
+
+.dm32-grey-key td {
+  padding: 0.25em 0.7em 0.25em 0;
+  text-align: left;
+  vertical-align: middle;
+}
+
+/* ---------------------------------------------- 4. figures are not done here
  *
- * There is nothing to buy with that anyway: Chrome already emits most of these
- * images as DeviceGray because the source PNGs are greyscale to begin with, and
- * a monochrome display converts whatever is left on its own.
+ * The figures are greyscaled too, but in render.mjs rather than in this file.
+ * `filter: grayscale(1)` is the CSS way to do it and it is a trap: the filter
+ * makes Chrome re-rasterise at layout resolution, which took the screenshots
+ * from their native 1241px down to 1084px. render.mjs instead redraws each
+ * image through a canvas at naturalWidth, so every source pixel survives.
  *
- * What that leaves unsolved: the keypad photographs are colour, and they show
- * the orange and blue shift keys. Greyscaled, those two keys are similar tones,
- * so the photographs cannot tell you which shift key is which -- only the text
- * labels above can. Nothing in CSS can fix a photograph.
+ * What neither approach fixes: the keypad photographs show the orange and blue
+ * shift keys, and greyscaled those two keys are similar tones. The photographs
+ * cannot tell you which shift key is which -- only the text labels can, which
+ * is why the labels above are marked rather than merely toned.
  */
