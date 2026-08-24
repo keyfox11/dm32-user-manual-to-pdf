@@ -115,8 +115,8 @@ The single-command scripts forward extra flags after `--`:
 npm run render -- --toc-depth 3 --margin 0.6
 ```
 
-**`build` and `build:sample` do not.** npm appends forwarded arguments to the end of the
-whole script string, so `npm run build -- --to 5` expands to
+**`build`, `build:sample` and `build:grey` do not.** npm appends forwarded arguments to the
+end of the whole script string, so `npm run build -- --to 5` expands to
 `node fetch-assets.mjs && node render.mjs --to 5`. The flag reaches only the render, and
 the fetch has already downloaded everything. Harmless in that direction, but the reverse
 (`--from`) leaves the render wanting images that were never fetched. Call the two scripts
@@ -154,7 +154,7 @@ Prints a PDF from what is in `cache/`. Never touches the network.
 | `--from N` | `1` | Chapter number to start at. Given alone, runs to the end. |
 | `--to M` | `26` | Chapter number to stop after. Given alone, starts at chapter 1. |
 | `--all` | — | All 26 chapters. Already the default, and accepted so saying it explicitly is not an error. |
-| `--out PATH` | `out/dm32_user_manual.pdf`, or `…_ch<from>-<to>.pdf` for a slice | Where to write |
+| `--out PATH` | `out/dm32_user_manual.pdf`, plus `_ch<from>-<to>` for a slice and `_grey` for a monochrome build | Where to write |
 
 **With neither bound given you get the whole manual.** The output is named for what it
 actually holds, so a complete build is plain `dm32_user_manual.pdf` and a slice carries its
@@ -238,12 +238,13 @@ PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium DM32_DEBUG=1 node render.mjs
 
 # How it works
 
-Six small files do the work.
+Seven small files do the work.
 
 | File | Role |
 |---|---|
 | `fetch-assets.mjs` | Mirrors the manual, both stylesheets, the Font Awesome webfont and every referenced image into `cache/`, laid out by host + path. The HTML is stored byte-identical to upstream. |
 | `print.css` | The print stylesheet: page geometry, density, and the page-break policy. |
+| `greyscale.css` | The monochrome overrides, injected after `print.css` when `--greyscale` is given. |
 | `render.mjs` | Drives Chrome: restructures the DOM, measures it, and prints. |
 | `pdf-tools.mjs` | Reads page positions back out of a rendered PDF, and stamps page numbers onto it. |
 | `chrome.mjs` | Finds an installed Chromium-based browser. |
@@ -350,7 +351,8 @@ because that template is identical on every sheet and cannot vary by page. It ca
 the cover nor switch numbering scheme partway through. The round-trip through `pdf-lib`
 preserves the outline, link annotations, named destinations and the tagged structure tree. It
 also re-packs objects into compressed streams, which makes the file smaller and means raw
-text-searching a finished PDF no longer finds `/Type /Page`. Use `pdf-tools.mjs` to inspect one.
+text-searching a finished PDF no longer finds `/Type /Page`. Use the helpers in
+`pdf-tools.mjs` to inspect one.
 
 ## Maths
 
@@ -389,7 +391,7 @@ node render.mjs --greyscale
 
 Writes `out/dm32_user_manual_grey.pdf`, leaving any colour build beside it. Intended for
 e-ink readers, monochrome laser printers and photocopies. Pagination is identical to the
-colour build at 200 pages. The render takes about twice as long, because every figure is
+colour build at 200 pages. The render takes a few seconds longer, because every figure is
 converted pixel by pixel.
 
 **Why this is not just desaturation.** The manual says which shift prefix a function needs
@@ -522,7 +524,7 @@ That rasterises every tenth page to `out/preview/` for a quick flip-through.
 **"No Chrome, Chromium or Edge found"**: set `PUPPETEER_EXECUTABLE_PATH` to your browser
 binary. The error lists everywhere it looked.
 
-**"Cache incomplete -- run node fetch-assets.mjs first"**: the render needs the mirror, and
+**`Cache incomplete -- run "node fetch-assets.mjs" first`**: the render needs the mirror, and
 nothing has been downloaded yet. `npm run build` does both in order.
 
 **Images missing from cache**: you fetched a narrower range than you are rendering. Either
@@ -553,7 +555,7 @@ already downloaded is skipped.
   the original. The `.bls` swatches keep the original colour deliberately: they are pictures of
   the physical key and need to match the keypad photographs.
 - **The two shift colours are not actually balanced.** `#4A82D6` was picked to match
-  `#F99A2B` at "L56% against L57%", but those are HSL lightness values, which are a cylinder
+  `#F99A2B` at "L56.5% against L57.3%", but those are HSL lightness values, which are a cylinder
   coordinate rather than a perceptual one. In CIE L\* the orange is 71.8 and the blue 54.3, a
   17.5-point gap. The blue labels do carry more weight on the page than the orange, just
   less than the `#2B69CA` that the current colour replaced. Left as-is rather than quietly
