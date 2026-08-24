@@ -1,8 +1,8 @@
 # DM32 User Manual → PDF
 
-The [SwissMicros DM32](https://www.swissmicros.com/product/dm32) ships its user manual as a
-single 1 MB HTML page and nothing else. There is no PDF, so there is no good way to read it
-on a tablet, annotate it, or keep a copy on the shelf next to the calculator.
+The [SwissMicros DM32](https://www.swissmicros.com/en/products/dm32) publishes its user
+manual online as a single 1 MB HTML page. That page is not much use on a tablet or an
+e-reader, and there is no way to annotate it or keep it available offline.
 
 This is a small pipeline that turns that page into a properly typeset **200-page US Letter
 PDF** — bookmarked, page-numbered, with a real table of contents, and with page breaks that
@@ -67,6 +67,12 @@ That writes a 19-page `out/dm32_user_manual_ch1-3.pdf`.
 rendered PDF lands in `out/`. Both are gitignored, deliberately. This is a tool for making
 yourself a readable copy of a document that is already published for free — please don't
 use it to redistribute SwissMicros' work.
+
+**SwissMicros also sells a printed User Manual for the DM32**, [from their
+shop](https://www.swissmicros.com/en/products/user-manual-dm32). This project is not a
+substitute for it and is not meant to be one: it exists to make the free online edition
+readable on a screen you already own. If you want the manual on paper, buy theirs. They
+wrote it.
 
 The fetcher identifies itself with a descriptive User-Agent, requests three files at a time
 rather than flooding the origin, and honours `Retry-After` when the server pushes back.
