@@ -70,9 +70,9 @@ use it to redistribute SwissMicros' work.
 
 **SwissMicros also sells a printed User Manual for the DM32**, [from their
 shop](https://www.swissmicros.com/en/products/user-manual-dm32). This project is not a
-substitute for it and is not meant to be one: it exists to make the free online edition
-readable on a screen you already own. If you want the manual on paper, buy theirs. They
-wrote it.
+substitute for it, nor is it meant to be one: it exists to make the free online edition
+readable offline on a screen you already own. If you want the manual on paper, buy theirs.
+They wrote it and deserve to be compensated for their work.
 
 The fetcher identifies itself with a descriptive User-Agent, requests three files at a time
 rather than flooding the origin, and honours `Retry-After` when the server pushes back.
