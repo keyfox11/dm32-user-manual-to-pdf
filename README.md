@@ -37,6 +37,18 @@ There is no bundled browser to download: the pipeline uses `puppeteer-core` and 
 one you already have. Common install locations on Windows, macOS and Linux are probed
 automatically. Set `PUPPETEER_EXECUTABLE_PATH` if yours lives somewhere unusual.
 
+**If you have none of the three**, install a standalone Chrome for Testing into the project
+and it will be found automatically from then on:
+
+```bash
+npx @puppeteer/browsers install chrome@stable
+```
+
+That lands a browser in `./chrome/` (gitignored, a few hundred MB). Nothing else to
+configure: `chrome/` is checked before the system locations, so a build pinned this way
+stays on that exact version even if you later install Chrome system-wide. Delete the
+directory to go back to the system browser.
+
 ## Quick start
 
 ```bash
@@ -522,7 +534,9 @@ That rasterises every tenth page to `out/preview/` for a quick flip-through.
 ## Troubleshooting
 
 **"No Chrome, Chromium or Edge found"**: set `PUPPETEER_EXECUTABLE_PATH` to your browser
-binary. The error lists everywhere it looked.
+binary. The error lists everywhere it looked. If you have no Chromium-based browser at all,
+run `npx @puppeteer/browsers install chrome@stable` to put one in `./chrome/`, which is
+probed automatically. See [Requirements](#requirements).
 
 **`Cache incomplete -- run "node fetch-assets.mjs" first`**: the render needs the mirror, and
 nothing has been downloaded yet. `npm run build` does both in order.

@@ -8,6 +8,10 @@ cache/
 # Rendered PDFs and preview rasters. Same reasoning -- build them, don't ship them.
 out/
 
+# A standalone Chrome for Testing, if `npx @puppeteer/browsers install` was used
+# to put one here. Several hundred MB of someone else's binary.
+chrome/
+
 npm-debug.log*
 .DS_Store
 Thumbs.db
