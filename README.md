@@ -380,9 +380,16 @@ MathJax typesets at load time, before `print.css` lands, so its output would oth
 for the 18 px screen body. `render.mjs` forces a rerender once the final styles are applied. It
 then waits for the queue, and for `document.fonts.ready`, before measuring anything.
 
-If MathJax ever fails to load the render does not fall over: a fallback pass strips the
-delimiters so expressions read as plain algebra rather than raw markup. Every run reports which
-path it took, so a silent regression to the fallback is visible:
+If MathJax ever fails to load, a fallback pass strips the delimiters so the page shows
+AsciiMath source rather than raw markup with `\$` hanging off it. That keeps the document
+readable, but it is not typeset maths and it is not quite plain algebra either. The
+normal-distribution integral prints as `int_bar x^x`, and a bold vector as `bbv_1`, where
+`bb` is AsciiMath's bold prefix leaking onto the page.
+
+A 200-page manual whose 544 equations have all silently turned into source text is exactly
+the kind of plausible-looking, quietly wrong output this pipeline refuses elsewhere, so
+**that fallback fails the build**. `render.mjs` names the cause and exits non-zero. Every
+run reports which path it took:
 
 ```
    maths typeset by MathJax   544
@@ -564,6 +571,13 @@ with holes in it.
 **"No chapters in range"**: `--from`/`--to` selected nothing, for example a `--from` past
 chapter 26, or bounds the wrong way round. Both scripts refuse rather than producing an
 empty PDF.
+
+**"MathJax did not load"**: the equations came out as AsciiMath source and the build failed
+on purpose. The lines above it say why. `MathJax file(s) missing from node_modules` means
+run `npm install`. `MathJax request(s) went to an unexpected URL` means upstream moved or
+upgraded MathJax, so `MATHJAX_CDN` in `render.mjs` and the `mathjax` dependency in
+`package.json` both need updating to the new version. The wait is capped at 30 seconds,
+since these files come off local disk and a healthy render typesets in about two.
 
 **429s during fetch**: the origin rate-limits bursts. The fetcher already backs off and
 retries up to five times. If it still fails, wait a few minutes and run it again. Anything

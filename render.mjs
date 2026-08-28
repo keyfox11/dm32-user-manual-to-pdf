@@ -44,12 +44,17 @@ const MATHJAX_DIR = join(ROOT, 'node_modules', 'mathjax');
    session rather than resetting per call, which is not enough headroom for a
    26-chapter, 222-image render on a slow machine.
 
-   MATHJAX_TIMEOUT must stay comfortably under PROTOCOL_TIMEOUT. Both were 180 s,
-   so a MathJax that never loaded raced its own poll against the protocol ceiling
-   and surfaced as a ProtocolError instead of the clean typeset-nothing fallback
-   below, which is a much worse thing to have to debug. */
+   MATHJAX_TIMEOUT is how long to wait for MathJax to become available. It must
+   stay well under PROTOCOL_TIMEOUT: both were 180 s, so a MathJax that never
+   loaded raced its own poll against the protocol ceiling and surfaced as an
+   opaque ProtocolError instead of the diagnosable failure it really is.
+
+   30 s is generous. These files are served off local disk rather than fetched
+   from a CDN, and a healthy render finishes the whole rerender in about two
+   seconds. Waiting three minutes to conclude that a local file did not appear
+   only delays a failure that is not going to resolve itself. */
 const PROTOCOL_TIMEOUT = 600000;
-const MATHJAX_TIMEOUT = 180000;
+const MATHJAX_TIMEOUT = 30000;
 
 const MIME = {
   '.js': 'application/javascript',
@@ -265,6 +270,7 @@ async function main() {
       const blocked = new Set();
       const mathjaxServed = new Set();
       const mathjaxMissing = new Set();
+      const mathjaxDrift = new Set();
       await page.setRequestInterception(true);
       page.on('request', async (req) => {
         const url = req.url();
@@ -291,6 +297,12 @@ async function main() {
             return req.abort();
           }
         }
+
+        /* A MathJax request that did not match MATHJAX_CDN above means upstream
+           moved or upgraded it. Recorded separately because `blocked` holds only
+           hosts, and cdnjs is on that list already for Font Awesome -- so this
+           would otherwise vanish into a line that looks entirely normal. */
+        if (/mathjax/i.test(url)) mathjaxDrift.add(url);
 
         blocked.add(new URL(url).host);
         req.abort();
@@ -853,7 +865,7 @@ async function main() {
       await page.close();
       return {
         pdf, report, measured, math, links, failedImages, greyed,
-        blocked, mathjaxServed, mathjaxMissing,
+        blocked, mathjaxServed, mathjaxMissing, mathjaxDrift,
       };
     };
 
@@ -929,6 +941,7 @@ async function main() {
 
     const {
       report, measured, math, links, failedImages, greyed, blocked, mathjaxServed, mathjaxMissing,
+      mathjaxDrift,
     } = result;
 
     /* ---- report ------------------------------------------------------ */
@@ -992,6 +1005,33 @@ async function main() {
       console.error(`\n${mathjaxMissing.size} MathJax file(s) missing from node_modules:`);
       for (const f of [...mathjaxMissing].slice(0, 10)) console.error(`   ${f}`);
       console.error('   Run: npm install');
+      process.exitCode = 1;
+    }
+    if (mathjaxDrift.size) {
+      console.error(`\n${mathjaxDrift.size} MathJax request(s) went to an unexpected URL:`);
+      for (const u of [...mathjaxDrift].slice(0, 5)) console.error(`   ${u}`);
+      console.error(`   This render only serves ${MATHJAX_CDN}`);
+      console.error('   Upstream has moved or upgraded MathJax, so the request was blocked.');
+      console.error('   Update MATHJAX_CDN in render.mjs and "mathjax" in package.json to match.');
+      process.exitCode = 1;
+    }
+    /* The fallback keeps a MathJax-less render readable, but it quietly changes
+       what the document says: a typeset integral becomes the literal text
+       "int_bar x^x". Shipping that as a successful build is the same failure
+       parseArgs refuses at the command line -- output that looks perfectly
+       plausible and is wrong, with nothing about it saying so. */
+    if (!math.ok && report.stats.stems) {
+      console.error(
+        `\nMathJax did not load, so ${report.stats.stems} expression(s) print as raw AsciiMath:`,
+      );
+      console.error('   an integral reads "int_bar x^x", a bold vector reads "bbv_1".');
+      console.error(
+        `   MathJax files served ${mathjaxServed.size}, missing ${mathjaxMissing.size}, ` +
+          `wrong URL ${mathjaxDrift.size}.`,
+      );
+      if (!mathjaxServed.size && !mathjaxMissing.size && !mathjaxDrift.size) {
+        console.error('   Nothing was requested at all: the manual may no longer load MathJax.');
+      }
       process.exitCode = 1;
     }
     if (failedImages.length) {
