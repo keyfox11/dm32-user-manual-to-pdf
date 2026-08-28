@@ -518,10 +518,25 @@ why the default keeps the figures large.
 
 ## Verifying a render
 
-Every run prints what it did: figures tagged, minimum effective image dpi, blocks kept whole,
-widow welds applied, how many pages the content actually needs versus how many were printed
-(the gap is space lost to break rules), and how many cross-references point outside the
-rendered range.
+Each render pass reports its phases as they finish, so a slow build is distinguishable from
+a hung one and it is obvious which phase the time went to:
+
+```
+Rendering (pass 1 of 2):
+   page loaded                0.7s
+   styles injected            1.7s
+   MathJax rerendered         1.9s
+   images decoded             0.0s
+   DOM transformed            0.0s
+   pagination measured        0.2s
+   PDF printed                12.1s
+   total                      16.6s
+```
+
+Then every run prints what it did: figures tagged, minimum effective image dpi, blocks kept
+whole, widow welds applied, how many pages the content actually needs versus how many were
+printed (the gap is space lost to break rules), and how many cross-references point outside
+the rendered range.
 
 To look at the result:
 

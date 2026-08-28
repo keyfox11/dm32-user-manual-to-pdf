@@ -40,6 +40,17 @@ const FA_FONT =
 const MATHJAX_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/';
 const MATHJAX_DIR = join(ROOT, 'node_modules', 'mathjax');
 
+/* Puppeteer's own default is 180 s and applies to every CDP round-trip in the
+   session rather than resetting per call, which is not enough headroom for a
+   26-chapter, 222-image render on a slow machine.
+
+   MATHJAX_TIMEOUT must stay comfortably under PROTOCOL_TIMEOUT. Both were 180 s,
+   so a MathJax that never loaded raced its own poll against the protocol ceiling
+   and surfaced as a ProtocolError instead of the clean typeset-nothing fallback
+   below, which is a much worse thing to have to debug. */
+const PROTOCOL_TIMEOUT = 600000;
+const MATHJAX_TIMEOUT = 180000;
+
 const MIME = {
   '.js': 'application/javascript',
   '.css': 'text/css',
@@ -223,6 +234,7 @@ async function main() {
     headless: true,
     defaultViewport: VIEWPORT,
     args: ['--allow-file-access-from-files', '--font-render-hinting=none'],
+    protocolTimeout: PROTOCOL_TIMEOUT,
   });
 
   try {
@@ -230,6 +242,21 @@ async function main() {
        Runs twice when a contents section is wanted -- the first pass discovers
        where every heading landed, the second bakes those page numbers in. */
     const renderOnce = async (tocNumbers) => {
+      /* Chrome does minutes of page-load, typeset, measure and print work here
+         without saying a word, and two of those phases are the ones that can run
+         long enough to hit a timeout. Name each as it finishes, so a slow render
+         is distinguishable from a hung one. Pass 1 discovers page numbers, pass 2
+         bakes them in -- say which is running, or the output looks like a loop. */
+      const passLabel = !args.toc ? '' : tocNumbers ? ' (pass 2 of 2)' : ' (pass 1 of 2)';
+      const started = Date.now();
+      let last = started;
+      const phase = (name) => {
+        const now = Date.now();
+        console.log(`   ${name.padEnd(26)} ${((now - last) / 1000).toFixed(1)}s`);
+        last = now;
+      };
+
+      console.log(`\nRendering${passLabel}:`);
       const page = await browser.newPage();
 
       /* Hermetic render: serve nothing from the network. The three jQuery/tocify
@@ -273,6 +300,7 @@ async function main() {
         waitUntil: 'load',
         timeout: 120000,
       });
+      phase('page loaded');
 
       /* Cascade order: site CSS, then Font Awesome, then our print rules last. */
       await page.addStyleTag({ content: siteCss });
@@ -301,6 +329,7 @@ async function main() {
       if (args.greyscale) {
         await page.addStyleTag({ content: greyscaleCss });
       }
+      phase('styles injected');
 
       /* MathJax typesets at load time, before print.css lands, so its output would
          be sized for the 18px screen body. Force a rerender now that the final
@@ -325,7 +354,8 @@ async function main() {
           faces,
           usesMathJaxFont: document.fonts.check('16px MathJax_Math'),
         };
-      }, 180000);
+      }, MATHJAX_TIMEOUT);
+      phase(math.ok ? 'MathJax rerendered' : 'MathJax absent');
 
       // Images must be decoded before naturalWidth is meaningful.
       await page.evaluate(async () => {
@@ -336,6 +366,7 @@ async function main() {
         );
         await document.fonts.ready;
       });
+      phase('images decoded');
 
       const report = await page.evaluate((opts) => {
         const { from, to, imageWidth, dpiFloor, greyscale } = opts;
@@ -593,6 +624,7 @@ async function main() {
         sourceUrl: MANUAL_URL,
         retrieved: stamp.retrieved ?? 'unknown date',
       });
+      phase('DOM transformed');
 
       /* ---- measurement pass ------------------------------------------------
          Only mark a block unbreakable once we know it actually fits. Applying
@@ -693,6 +725,7 @@ async function main() {
             return stats;
           })
         : null;
+      if (greyed) phase('figures greyscaled');
 
       const measured = await page.evaluate((liveHeightPx, ratio, weldRatio) => {
         const limit = liveHeightPx * ratio;
@@ -775,6 +808,7 @@ async function main() {
           figureIn: figurePx / 96,
         };
       }, VIEWPORT.height, args.keepWholeRatio, args.weldRatio);
+      phase('pagination measured');
 
       /* Only images still in the document matter -- Chrome fetched every image in
          the file during load, including the chapters we then dropped. */
@@ -811,8 +845,10 @@ async function main() {
         displayHeaderFooter: false,
         tagged: true,
         outline: true, // heading tree -> PDF bookmarks
-        timeout: 600000, // a full 26-chapter print is far heavier than a pilot
+        timeout: PROTOCOL_TIMEOUT, // a full 26-chapter print is far heavier than a pilot
       });
+      phase('PDF printed');
+      console.log(`   ${'total'.padEnd(26)} ${((Date.now() - started) / 1000).toFixed(1)}s`);
 
       await page.close();
       return {
