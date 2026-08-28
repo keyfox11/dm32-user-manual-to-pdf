@@ -194,8 +194,46 @@ function parseArgs(argv) {
   return a;
 }
 
+/* MathJax 2 and MathJax 4 share a package name and almost nothing else. The v2
+   entry point MathJax.js is absent from later majors, and the Hub API this
+   manual drives went with it, so a v4 tree satisfies the import and then fails
+   to serve a single file.
+
+   That swap is easy to make by accident. npm reports a high-severity ReDoS
+   advisory against mathjax <= 2.7.9 and recommends "npm audit fix --force" in
+   the same breath, which rewrites package.json to ^4.1.3 and quietly takes
+   every equation in the document with it. Check before spending a minute
+   rendering, and never answer a v4 tree with "run npm install" -- that just
+   reinstalls v4. */
+async function assertMathJax2() {
+  const fail = (msg) => {
+    const err = new Error(msg);
+    err.usage = true; // a broken install, not a crash -- no stack trace
+    throw err;
+  };
+  let version;
+  try {
+    version = JSON.parse(await readFile(join(MATHJAX_DIR, 'package.json'), 'utf8')).version;
+  } catch {
+    fail('MathJax is not installed in node_modules.\nRun: npm install');
+  }
+  if (Number(version.split('.')[0]) !== 2) {
+    fail(
+      `node_modules has MathJax ${version}, but this pipeline needs 2.x.\n` +
+        'MathJax 3 and 4 dropped MathJax.js and the Hub API the manual uses, so all\n' +
+        '544 equations would fall back to raw AsciiMath source.\n\n' +
+        '"npm audit fix --force" upgrades mathjax across a major version and causes\n' +
+        'exactly this. To undo it:\n' +
+        '  git checkout package.json package-lock.json && npm ci\n\n' +
+        'The advisory it acts on (ReDoS, GHSA-v638-q856-grg8) needs attacker-controlled\n' +
+        'input to matter. This render typesets one fixed local document, offline.',
+    );
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  await assertMathJax2();
   const chrome = await findChrome();
   const VIEWPORT = liveArea(args.margin);
 

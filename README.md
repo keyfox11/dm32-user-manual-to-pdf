@@ -55,6 +55,12 @@ directory to go back to the system browser.
 npm install && npm run build
 ```
 
+> [!WARNING]
+> `npm install` will report 4 high severity vulnerabilities and recommend
+> `npm audit fix --force`. **Do not run it.** It upgrades `mathjax` across a major
+> version, which silently breaks all 544 equations in the manual. See
+> [A note on npm audit](#a-note-on-npm-audit).
+
 That is the whole thing. It writes the complete 200-page manual to
 `out/dm32_user_manual.pdf`.
 
@@ -88,6 +94,37 @@ They wrote it and deserve to be compensated for their work.
 
 The fetcher identifies itself with a descriptive User-Agent, requests three files at a time
 rather than flooding the origin, and honours `Retry-After` when the server pushes back.
+
+## A note on npm audit
+
+> [!WARNING]
+> **Do not run `npm audit fix --force` in this repository.** It upgrades `mathjax`
+> from 2.7.9 to 4.x and `puppeteer-core` from 24 to 25, both SemVer major changes.
+> MathJax 4 shares nothing with MathJax 2 beyond the package name: no `MathJax.js`,
+> no `Hub` API. All 544 of the manual's equations degrade to raw AsciiMath source.
+
+`npm install` reports **4 high severity vulnerabilities** and recommends that command on
+sight. `render.mjs` refuses to start on any MathJax outside 2.x rather than letting you find
+out 80 seconds into a render.
+
+If you have already run it:
+
+```bash
+git checkout package.json package-lock.json && npm ci
+```
+
+Both advisories are real bugs, in code paths this project does not execute:
+
+| Advisory | Why it does not reach this pipeline |
+|---|---|
+| `mathjax` ReDoS, [GHSA-v638-q856-grg8](https://github.com/advisories/GHSA-v638-q856-grg8) | Needs attacker-controlled input to the typesetter. This renders one fixed local document, offline, with every network request blocked. |
+| `extract-zip` symlink traversal, [GHSA-jmr9-qjv8-65gv](https://github.com/advisories/GHSA-jmr9-qjv8-65gv), reached via `@puppeteer/browsers` | Only runs when extracting a downloaded browser archive. `puppeteer-core` deliberately never downloads a browser, and this project drives one already on disk. |
+
+One caveat on the second: the optional `npx @puppeteer/browsers install chrome@stable` route
+in [Requirements](#requirements) *does* extract an archive. That is fine, because `npx`
+fetches its own current copy of `@puppeteer/browsers` (3.2.1 at the time of writing) rather
+than the 2.13.2 pinned transitively here, and it extracts a Google-published archive over
+HTTPS.
 
 ## Options
 
@@ -571,6 +608,14 @@ with holes in it.
 **"No chapters in range"**: `--from`/`--to` selected nothing, for example a `--from` past
 chapter 26, or bounds the wrong way round. Both scripts refuse rather than producing an
 empty PDF.
+
+**"node_modules has MathJax 4.x, but this pipeline needs 2.x"**: something moved the
+`mathjax` dependency across a major version, almost certainly `npm audit fix --force`. See
+[A note on npm audit](#a-note-on-npm-audit). Undo it with:
+
+```bash
+git checkout package.json package-lock.json && npm ci
+```
 
 **"MathJax did not load"**: the equations came out as AsciiMath source and the build failed
 on purpose. The lines above it say why. `MathJax file(s) missing from node_modules` means
